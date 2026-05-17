@@ -27,7 +27,7 @@ const ENCOUNTER_TTL_MS = 30 * 60 * 1000;
 
 // memory-oracle API endpoint — set at build time via the runtime injecter, or
 // fall back to the demo cloudflared URL for the POC.
-const API_URL = 'https://donna-backup-controlled-main.trycloudflare.com';
+const API_URL = 'https://meaning-skill-hide-lender.trycloudflare.com';
 const API_TOKEN = '979eaa2994c1889ababae1da556bc1fad9d620402eb09da380a3d3aa0a8b0a1a';
 // In production the API_TOKEN is the per-encounter JWT, NOT a static string. The
 // session_key derived during scan would be the bearer credential.
