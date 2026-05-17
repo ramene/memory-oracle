@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "memory-oracle Dr.",
+    "slug": "memory-oracle-doctor",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan patient wristband QR to begin an encounter and retrieve their consented records.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.memoryoracle.doctor",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      ["expo-camera", { "cameraPermission": "Scan patient wristband QR" }]
+    ]
+  }
+}

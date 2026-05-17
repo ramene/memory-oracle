@@ -1,13 +1,10 @@
 {
-  "name": "@memory-oracle/mobile",
+  "name": "@memory-oracle/mobile-doctor",
   "version": "0.1.0",
-  "description": "Clinician-side QR scanner + patient-contact decryption — POC for memory-oracle clinical deployment",
+  "description": "Clinician (Doctor's iPad) viewer — scans patient wristband QR, displays supersession-aware records, end-encounter on demand",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "ios": "expo start --ios",
-    "android": "expo start --android",
-    "tunnel": "expo start --tunnel"
+    "start": "expo start"
   },
   "dependencies": {
     "@expo/ngrok": "^4.1.3",

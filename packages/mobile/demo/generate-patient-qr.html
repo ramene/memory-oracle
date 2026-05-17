@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>memory-oracle — patient wristband QR generator</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #222; }
   h1 { font-size: 22px; }
@@ -65,10 +64,11 @@ function gen() {
 
   const qrDiv = document.getElementById('qr');
   qrDiv.innerHTML = '';
-  QRCode.toCanvas(json, { width: 280, margin: 1 }, (err, canvas) => {
-    if (err) { qrDiv.textContent = err.message; return; }
-    qrDiv.appendChild(canvas);
-  });
+  const img = document.createElement('img');
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=' + encodeURIComponent(json);
+  img.width = 300; img.height = 300;
+  img.alt = 'patient wristband QR';
+  qrDiv.appendChild(img);
 }
 gen();
 </script>
