@@ -1,0 +1,13 @@
+# Runtime artifacts (NEVER commit)
+*.db
+*.db-wal
+*.db-shm
+*.log
+.hook-debug.log
+
+# OS
+.DS_Store
+
+# Operator-specific
+/local/
+*.local.*
