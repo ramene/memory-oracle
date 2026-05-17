@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>memory-oracle — patient wristband QR generator</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; color: #222; }
+  h1 { font-size: 22px; }
+  .row { display: flex; gap: 12px; margin: 12px 0; }
+  input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; }
+  button { padding: 10px 18px; background: #0066cc; color: #fff; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+  #qr { display: flex; justify-content: center; padding: 30px; background: #fafafa; border-radius: 10px; margin: 20px 0; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 11px; overflow-x: auto; }
+  .wristband { border: 2px solid #333; border-radius: 12px; padding: 20px; margin: 20px 0; background: #fffdf2; }
+  .wristband h2 { margin-top: 0; }
+</style>
+</head>
+<body>
+<h1>memory-oracle — synthetic patient wristband QR</h1>
+<p>Generates a JSON payload + QR for testing the clinician mobile app. <strong>Synthetic data only — never use for real PHI.</strong></p>
+
+<div class="row">
+  <input id="pid" value="jane-doe-1959" placeholder="patient_id">
+  <button onclick="gen()">Generate</button>
+</div>
+
+<div class="wristband">
+  <h2>WRISTBAND — Patient <span id="pidDisplay">jane-doe-1959</span></h2>
+  <p>DOB 1959-04-22 · MRN 47102-A</p>
+  <div id="qr"></div>
+  <p style="text-align: center; font-family: monospace; font-size: 11px; color: #888;" id="payloadInline"></p>
+</div>
+
+<h3>QR payload (JSON)</h3>
+<pre id="payload"></pre>
+
+<h3>What the clinician app does on scan</h3>
+<ol>
+  <li>Parses payload as JSON, validates v == 1</li>
+  <li>Looks up clinician_secret in SecureStore (set during one-time enrollment)</li>
+  <li>Computes session_key = SHA256(clinician_secret + '|' + patient_id + '|' + salt)</li>
+  <li>Displays session_key on screen for clinician to enter at terminal</li>
+  <li>Writes audit log entry: timestamp, event, patient_id, key_fingerprint</li>
+</ol>
+
+<h3>Terminal-side decryption</h3>
+<pre>./packages/mobile/demo/unlock-patient.sh jane-doe-1959 &lt;session_key_hex&gt;</pre>
+<p>The terminal mounts a tmpfs at <code>~/.clinical-memory/&lt;patient_id&gt;/</code>, decrypts the patient's memory namespace, and runs <code>memory-search</code> against it. 30-min TTL.</p>
+
+<script>
+function gen() {
+  const patient_id = document.getElementById('pid').value.trim() || 'jane-doe-1959';
+  // 16-byte random salt — base16
+  const saltBytes = new Uint8Array(16);
+  crypto.getRandomValues(saltBytes);
+  const salt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const payload = { v: 1, patient_id, salt };
+  const json = JSON.stringify(payload);
+
+  document.getElementById('pidDisplay').textContent = patient_id;
+  document.getElementById('payload').textContent = JSON.stringify(payload, null, 2);
+  document.getElementById('payloadInline').textContent = json;
+
+  const qrDiv = document.getElementById('qr');
+  qrDiv.innerHTML = '';
+  QRCode.toCanvas(json, { width: 280, margin: 1 }, (err, canvas) => {
+    if (err) { qrDiv.textContent = err.message; return; }
+    qrDiv.appendChild(canvas);
+  });
+}
+gen();
+</script>
+</body>
+</html>

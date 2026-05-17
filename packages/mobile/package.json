@@ -1,0 +1,23 @@
+{
+  "name": "@memory-oracle/mobile",
+  "version": "0.1.0",
+  "description": "Clinician-side QR scanner + patient-contact decryption — POC for memory-oracle clinical deployment",
+  "main": "App.js",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "tunnel": "expo start --tunnel"
+  },
+  "dependencies": {
+    "expo": "~52.0.0",
+    "expo-camera": "~16.0.0",
+    "expo-crypto": "~14.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-svg": "15.8.0"
+  },
+  "private": true
+}
