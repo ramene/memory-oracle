@@ -1,0 +1,16 @@
+{
+  "name": "@memory-oracle/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server (stdio) exposing memory-oracle retrieval as tools",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {
+    "memory-oracle-mcp": "./server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

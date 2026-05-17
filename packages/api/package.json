@@ -1,0 +1,13 @@
+{
+  "name": "@memory-oracle/api",
+  "version": "0.1.0",
+  "description": "REST API exposing memory-oracle retrieval — bearer-token auth, zero dependencies beyond node stdlib",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {
+    "memory-oracle-api": "./server.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

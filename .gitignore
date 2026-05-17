@@ -11,3 +11,7 @@
 # Operator-specific
 /local/
 *.local.*
+memory-search.bin
+memory-cite.bin
+dist/
+packages/go-cli/vendor/
