@@ -1,0 +1,103 @@
+% F2 — Precedence Invariant (TikZ, paper-quality vector figure)
+% Sequence diagram showing supersession block precedes canonical body.
+% Concrete clinical anchors: "andexanet alfa" at line 21, "FFP" at line 79.
+%
+% Used in §5 Clinical Case Study as Figure 2, alongside Theorem 1.
+% Include via: \input{figures/F2-precedence.tex}
+
+\begin{figure}[t]
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  >=stealth,
+  every node/.style={align=left},
+  superblock/.style={rectangle, draw, thick, fill=orange!12, draw=orange!70!black,
+                     rounded corners=2pt, inner sep=6pt, text width=8cm,
+                     font=\sffamily\scriptsize\linespread{1.05}\selectfont},
+  canonblock/.style={rectangle, draw, thick, fill=blue!8, draw=blue!60!black,
+                     rounded corners=2pt, inner sep=6pt, text width=8cm,
+                     font=\sffamily\scriptsize\linespread{1.05}\selectfont},
+  lineno/.style={font=\ttfamily\tiny, gray!60!black, anchor=east},
+  callout/.style={rectangle, draw, thick, rounded corners=2pt,
+                  inner sep=3pt, font=\sffamily\scriptsize\bfseries},
+  superhi/.style={callout, fill=orange!30, draw=orange!80!black},
+  stalehi/.style={callout, fill=blue!18, draw=blue!70!black},
+  arrowlabel/.style={font=\sffamily\scriptsize, fill=white, inner sep=1pt}
+]
+
+% --- Supersession block ---
+\node[superblock] (super) at (0,0) {%
+  \textbf{\textcolor{orange!70!black}{\#\# Supersession Notice (1 record)}}\\[2pt]
+  \textbf{Supersession 1 — 2024-03-15T14:22:00Z}\\
+  Scope: warfarin regimen + FFP reversal protocol\\
+  Corrected: patient on apixaban 5\,mg BID.\\
+  \textbf{Reversal: \textcolor{orange!80!black}{andexanet alfa}} (NOT FFP, NOT vitamin K).\\
+  Source: cardiology-consult-2024-03-15\\
+  Operator confirmed: Dr.~Marcus Chen, Cardiology
+};
+
+% --- Line number markers for supersession block ---
+\node[lineno] at ($(super.north west)+(-0.3,-0.08)$) {L1};
+\node[lineno] at ($(super.south west)+(-0.3,0.08)$) {L30};
+
+% --- Canonical block (positioned below with vertical gap representing line gap) ---
+\node[canonblock, below=2.0cm of super.south, anchor=north] (canon) {%
+  \textbf{[Canonical record — 2008-04-12, preserved verbatim]}\\[2pt]
+  Anticoagulant: warfarin 5\,mg PO daily for paroxysmal AFib (CHA$_2$DS$_2$-VASc=3).\\
+  INR target 2.0–3.0.\\
+  \textbf{Reversal (acute bleed): \textcolor{blue!70!black}{Fresh Frozen Plasma}} + Vitamin K 10\,mg IV +\\
+  4-factor PCC (KCentra) as fallback.\\
+  Patient counseled re:\ dietary vitamin K consistency.
+};
+
+\node[lineno] at ($(canon.north west)+(-0.3,-0.08)$) {L31};
+\node[lineno] at ($(canon.south west)+(-0.3,0.08)$) {L100};
+
+% --- Vertical "line counter" / order axis ---
+\draw[->, very thick, gray!60!black] ($(super.north west)+(-0.9,0.4)$)
+  -- ($(canon.south west)+(-0.9,-0.4)$)
+  node[midway, sloped, above, font=\sffamily\scriptsize\itshape, gray!60!black]
+       {sequential read order};
+
+% --- Callouts: andexanet (correct, in super block) ---
+\node[superhi] (correct) at ($(super.east)+(2.8,0)$) {andexanet alfa};
+\draw[->, thick, orange!80!black] (correct.west) -- ++(-0.4,0)
+  node[arrowlabel, near end, above, orange!80!black] {Line $\sim$21};
+
+% --- Callouts: FFP (stale, in canonical) ---
+\node[stalehi] (stale) at ($(canon.east)+(2.8,0)$) {Fresh Frozen Plasma};
+\draw[->, thick, blue!70!black] (stale.west) -- ++(-0.4,0)
+  node[arrowlabel, near end, above, blue!70!black] {Line $\sim$79};
+
+% --- Lead-line annotation ---
+\node[font=\sffamily\scriptsize\itshape, gray!50!black, align=center]
+  at ($(super.south)!0.5!(canon.north)+(0,0)$)
+  {\textbf{58-line lead} — sequential LLM reader\\
+   encounters correction \emph{before} the stale assertion};
+
+% --- Theorem reference, below ---
+\node[font=\sffamily\scriptsize, gray!60!black, align=left, text width=14cm,
+      below=0.4cm of canon.south, anchor=north]
+  {\textbf{Theorem 1 (Precedence Invariant).}
+   Let $D$ be a canonical memory file with $k \geq 1$ supersession records
+   $\{s_1, \ldots, s_k\}$ written at times $t_1 < \cdots < t_k$. The retrieval
+   merge operator $M(D)$ produces an output $O$ such that for every line $\ell_s$
+   containing a supersession assertion and every line $\ell_c$ containing a
+   superseded canonical assertion, $\ell_s < \ell_c$ in the byte order of $O$.
+   \textsl{Proof: by construction of $M$ (Algorithm~\ref{alg:merge}); empirically
+   verified at $100\%$ over $N{=}1000$ randomized queries against the synthetic
+   Jane Doe vault (\S\ref{sec:empirical}).}};
+
+\end{tikzpicture}%
+}
+\caption{The precedence invariant, illustrated against the warfarin-to-apixaban
+clinical case. The retrieval engine emits supersession records (orange,
+lines 1–30) before the canonical body (blue, lines 31–100). A sequential
+reader — LLM or human — encounters the correction ``andexanet alfa''
+58 lines before the stale ``Fresh Frozen Plasma'' assertion. The
+invariant holds structurally (Theorem~\ref{thm:precedence}), independent
+of model behavior; it cannot be regressed by prompt drift or embedding
+similarity ranking.}
+\label{fig:precedence}
+\end{figure}

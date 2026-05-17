@@ -1,0 +1,87 @@
+% F1 — Architecture overview (TikZ, paper-quality vector figure)
+% Three-tier corpus + merge engine + LLM consumer.
+% Color-coded by tier; dashed boundaries group conceptual regions.
+% Style follows Gao et al. (Amazon Science 2022, RAMKG) Figure 1.
+%
+% Used in §3 Architecture as Figure 1.
+% Include via: \input{figures/F1-architecture.tex}
+
+\begin{figure}[t]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  >=stealth,
+  node distance=0.6cm and 0.9cm,
+  every node/.style={align=center},
+  tier/.style={rectangle, rounded corners=2pt, draw, thick,
+               minimum width=4.2cm, minimum height=1.3cm, inner sep=4pt},
+  curated/.style={tier, fill=blue!10, draw=blue!60!black},
+  super/.style={tier, fill=orange!18, draw=orange!70!black},
+  digest/.style={tier, fill=gray!10, draw=gray!60!black},
+  engine/.style={rectangle, draw, thick, fill=green!12, draw=green!50!black,
+                 minimum width=3.4cm, minimum height=2.2cm, rounded corners=4pt},
+  consumer/.style={cylinder, draw, thick, fill=violet!10, draw=violet!60!black,
+                   shape border rotate=90, aspect=0.3,
+                   minimum width=2.6cm, minimum height=1.3cm},
+  group/.style={draw, dashed, gray, rounded corners=4pt, inner sep=6pt},
+  flow/.style={->, thick, draw=black!70},
+  legend/.style={font=\sffamily\scriptsize, gray!60!black}
+]
+
+% --- Tier nodes ---
+\node[curated] (curated) {\textbf{Tier 1 — Curated memory}\\\scriptsize \texttt{*.md} (canonical)};
+\node[super, below=of curated] (super) {\textbf{Supersession sidecars}\\\scriptsize \texttt{*.md.supersessions.jsonl}\\\scriptsize (append-only)};
+\node[digest, below=of super] (digest) {\textbf{Tier 2 — Journal digests}\\\scriptsize transcript-distilled summaries};
+
+% --- Dashed boundary grouping the curated + supersession ---
+\node[group, fit=(curated)(super), label={[legend,anchor=south west,xshift=0pt,yshift=-2pt]north west:Operator-authored corpus}] (curatedgroup) {};
+
+% --- Merge engine ---
+\node[engine, right=2.2cm of super.east, anchor=west] (engine) {%
+  \textbf{Retrieval Engine}\\[2pt]
+  \scriptsize SQLite FTS5 + BM25\\
+  \scriptsize \textsl{accretive merge}\\
+  \scriptsize precedence: super $\prec$ canonical
+};
+
+% --- LLM consumer ---
+\node[consumer, right=1.4cm of engine.east, anchor=west] (llm) {%
+  \textbf{LLM}\\[1pt]\scriptsize agent / CDSS
+};
+
+% --- File-system watcher (small, top-right of engine) ---
+\node[draw, thick, fill=yellow!18, draw=yellow!60!black,
+      rectangle, rounded corners=2pt, minimum width=2cm, minimum height=0.7cm,
+      above=0.5cm of engine.north, anchor=south,
+      font=\sffamily\scriptsize] (watcher) {fs-watcher (1\,s)};
+
+% --- Arrows ---
+\draw[flow] (curated.east) -- ++(0.5cm,0) |- (engine.west |- curated);
+\draw[flow] (super.east)   -- (engine.west |- super);
+\draw[flow] (digest.east)  -- ++(0.5cm,0) |- (engine.west |- digest);
+
+\draw[flow] (engine.east) -- node[above,font=\sffamily\scriptsize]{merged result\\(super first)} (llm.west);
+
+\draw[flow, dashed, gray] (watcher.south) -- (engine.north);
+\draw[flow, dashed, gray] (watcher.west) -| ++(-1cm,-0.3cm) -| (curated.north);
+
+% --- Legend ---
+\node[legend, below=0.4cm of digest.south, anchor=north, align=left, text width=12cm] {%
+  \textbf{Precedence invariant:} for any retrieved file with $k \geq 1$ supersession records,
+  the merged output places all $k$ records before the canonical body —
+  ensuring sequential readers (LLMs or humans) encounter the correction first.\\
+  \textit{Theorem~\ref{thm:precedence}: empirically verified at $100\%$ over $N{=}1000$ randomized queries.}
+};
+
+\end{tikzpicture}%
+}
+\caption{Architecture of memory-oracle. The retrieval engine indexes three corpus
+tiers (curated files, supersession sidecars, journal digests) and merges
+supersession records ahead of canonical bodies at read time. A filesystem
+watcher absorbs new writes within $\sim$1\,s, enabling a self-extending
+corpus. The LLM consumer (clinical decision support, coding agent, trading
+strategy assessor) receives a single merged document in which corrections
+structurally precede the assertions they supersede.}
+\label{fig:architecture}
+\end{figure}
