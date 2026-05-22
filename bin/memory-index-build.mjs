@@ -49,9 +49,24 @@ if (!sqliteAvailable()) {
 
 function sql(query, opts = {}) {
   // Use stdin to avoid quoting issues; `.mode json` for structured reads.
+  // PRAGMA busy_timeout=5000 makes the CLI block-retry for up to 5s when the DB
+  // is locked by a concurrent writer (e.g., two memory-file writes from
+  // different sessions racing through the fs-watcher). Without it the CLI
+  // errors immediately with "database is locked (5)" and the write is lost
+  // until the next watcher tick. Empirically observed 2026-05-21: ~47% of
+  // writes erroring during multi-session bursts.
+  // `.timeout 5000` dot-command sets busy_timeout for this connection without
+  // emitting any output (unlike PRAGMA, which prints its return value in
+  // shell mode and a JSON array in -json mode). Prepended to every query so
+  // both read (json mode) and write (default mode) paths get the timeout.
+  // Empirically verified 2026-05-21 — switching from in-stdin PRAGMA (which
+  // ran AFTER parse-time lock checks and didn't help) to .timeout (set at
+  // connection open before any query parses) resolved the concurrent-write
+  // failures observed during multi-session bursts.
   const args = [DB_PATH];
   if (opts.json) args.unshift('-json');
-  const r = spawnSync('sqlite3', args, { input: query, encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
+  const prefixedQuery = `.timeout 5000\n${query}`;
+  const r = spawnSync('sqlite3', args, { input: prefixedQuery, encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
   if (r.status !== 0) {
     throw new Error(`sqlite3 failed (status ${r.status}): ${r.stderr}\nquery: ${query.slice(0,200)}`);
   }
