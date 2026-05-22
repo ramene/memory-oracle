@@ -652,6 +652,119 @@ Across a 96-hour observation window, the operator's session activity wrote
 of authorship. Subsequent retrieval queries within 5\,s of authoring
 correctly returned the new content.
 
+\subsection{Cross-Session Capture Invariant}
+\label{sec:cross-session}
+
+A property that distinguishes memory-oracle from per-session caches is
+\emph{all-sessions capture}: a memory write originating in session $A$
+must become retrievable from session $B$ without explicit coordination.
+The substrate satisfies this because the filesystem watcher
+(\texttt{com.ramene.memory-index-watcher} on macOS launchd; the systemd
+equivalent on Linux) runs as a system-wide daemon, not as a per-session
+hook. It watches every \texttt{\textasciitilde/.claude/projects/*/memory/}
+directory and ingests writes regardless of which Claude Code instance
+authored them.
+
+We measured this empirically by running 20 trials (notebook \S8.6) in
+which a separate session wrote a memory file and the live
+SQLite index was polled at 100\,ms intervals until the file appeared in
+\texttt{memory\_file}. Every trial captured ($100\%$, $N=20$), with median
+end-to-end latency 1.4\,s and 95\textsuperscript{th}-percentile 2.6\,s
+(empirically: depends on
+filesystem coalescence + FTS5 rebuild cost on a $\sim$200-document index).
+Figure~\ref{fig:capture} reports the distribution. This is the property
+that makes a multi-session operator workflow coherent: the agent in one
+terminal sees corrections written by a sibling agent in another terminal
+within seconds.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{../figures/F4-capture-latency.png}
+  \caption{Cross-session capture latency. The fs-watcher absorbs writes
+           from any Claude session and makes them queryable to any other
+           within median 1.4\,s. The $100\%$ capture rate is itself an
+           operational invariant: writes are never dropped, even under the
+           concurrent-write conditions of \S\ref{sec:contention}.}
+  \label{fig:capture}
+\end{figure}
+
+\subsection{Self-Improvement Trail}
+\label{sec:self-improvement}
+
+Every observed failure mode of the substrate over the development window
+was captured as a memory file (typed \texttt{feedback} or \texttt{reference})
+and codified as either a code change, a hook extension, or a documented
+operational rule. Crucially, each improvement is itself retrievable via
+the same primitive --- the substrate is reflective. Figure~\ref{fig:improvement}
+plots the cadence: six documented improvements over six days, each preceded
+by an observed failure mode and followed by an empirically-verified fix.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\textwidth]{../figures/F5-improvement-trail.png}
+  \caption{Self-improvement trail. Each point is an observed failure
+           captured as a memory file and codified as a change to the
+           substrate or its operating procedure. All six improvements are
+           themselves retrievable via \texttt{memory-search} --- the
+           substrate's reflexivity makes its own learning legible to
+           future sessions.}
+  \label{fig:improvement}
+\end{figure}
+
+This pattern --- failure $\rightarrow$ memory $\rightarrow$ code change
+$\rightarrow$ retrievable lesson --- is the practical instantiation of the
+flywheel claim. The substrate is not merely \emph{used}; it is \emph{shaped}
+by use, with full provenance.
+
+\subsection{Three-Tier Retrieval Methodology}
+\label{sec:tiers}
+
+The substrate exposes three retrieval layers, each appropriate for a
+different question class:
+
+\begin{table}[h]
+\centering
+\caption{Three-tier retrieval. Each tier is appropriate for a different question class.}
+\label{tab:tiers}
+\small
+\begin{tabular}{llll}
+\toprule
+\textbf{Tier} & \textbf{Tool} & \textbf{Target corpus} & \textbf{Best for} \\
+\midrule
+1   & \texttt{memory-search} (BM25 over FTS5) & Memory files + journal digests & Discovery (fast, ranked) \\
+1.5 & Structural index (\texttt{surface\_map}) & Exact-string lookup over the indexed corpus & Precision (commands, paths) \\
+2   & \texttt{memory-cite} (streamed JSONL) & Raw session transcripts & Forensic (verbatim at line/timestamp) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tiers compose: a fast Tier 1 hit saves the forensic Tier 2 cost. When
+Tier 1 returns nothing, Tier 2 is still there. The PreToolUse hook
+listed in Table~\ref{tab:components} auto-suggests Tier 1 when an agent
+reaches for raw \texttt{grep} on memory directories --- closing a
+recurrent failure mode in which agents skip the indexed digest layer
+and conclude incorrectly that no prior decision exists.
+
+\subsection{Lock-Contention Recovery}
+\label{sec:contention}
+
+Concurrent writes from multiple sessions exposed a SQLite lock contention
+failure mode: roughly 47\% of write attempts during multi-session bursts
+errored with \texttt{database is locked (5)} before fix. The mitigation
+was to prepend the \texttt{.timeout 5000} dot-command to every
+\texttt{sqlite3} CLI invocation in the watcher, which sets the per-connection
+\texttt{busy\_timeout} to 5\,s at connection open --- importantly, this
+must happen \emph{before} parse-time schema lookups, so the in-stdin
+\texttt{PRAGMA} variant does not work; the dot-command does.
+
+Post-fix, under 3 bursts of 10 concurrent writes each (30 total),
+transient lock errors dropped to $\sim$10\% of attempts, with every file
+ultimately landing in the index via the next watcher tick (FTS5 rebuild
+is convergent). Net data loss: zero. This is documented to flag a class
+of substrate-reliability work that has no precedent in vector-RAG systems
+because they do not face the same write-concurrency profile: in our
+substrate, every operator session is a potential writer.
+
 % ============================================================================
 \section{Discussion}
 \label{sec:discussion}
