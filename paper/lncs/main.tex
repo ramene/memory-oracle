@@ -478,8 +478,18 @@ cd memory-oracle
 \label{sec:cross-domain}
 
 The accretive supersession primitive is not specific to clinical AI. We
-demonstrate by retrofitting an operator-validated automated trading platform
-whose internal architecture already exhibits implicit accretive behavior.
+demonstrate the second case study by retrofitting an operator-validated
+automated trading platform whose internal architecture already exhibits
+implicit accretive behavior. The same litmus that proved the clinical
+case (\S\ref{sec:clinical}) holds here at $100\%$ over $N{=}1000$
+randomized queries against a synthetic trader vault: a 2026-04-09 hard
+rule (``KuCoin spot agents cannot short'') is superseded by a 2026-05-13
+authorization (``shadow $\rightarrow$ testnet paper $\rightarrow$
+real-money canary on Binance Futures''), and the supersession block
+appears 30 lines before the canonical body in the merged retrieval. The
+reproducibility script is
+\texttt{docs/examples/trading-supersession-proof.sh}; the empirical notebook
+is \texttt{mae-notebooks/memory-oracle/trading-case-study.ipynb}.
 
 \subsection{Implicit Supersessions in Operator Practice}
 
@@ -532,6 +542,84 @@ Production engineering & runbook procedures after incidents \\
 All five share three properties: rules evolve in response to observed
 outcomes, provenance is legally or operationally required, and acting on a
 stale assertion is dangerous.
+
+\subsection{Required Primitive for Shorting, Futures, and Perpetuals}
+\label{sec:shorts-required}
+
+We elevate the trading case study to a stronger claim than ``accretive
+retrieval helps in algorithmic trading.'' For the SHORTING / FUTURES /
+PERPETUAL sub-domain specifically, the substrate is \emph{the missing
+primitive}; agents cannot safely participate in these markets without it.
+Three independent reasons:
+
+\begin{enumerate}
+  \item \textbf{Public training data is descriptive, not operational.}
+        Large language models know what a short squeeze is; they do not
+        know the operator's funding-rate threshold, per-regime leverage
+        cap, liquidation-band requirement, or
+        circuit-breaker condition. These rules are operator-authored,
+        not public.
+  \item \textbf{The rules evolve weekly.} The operator's six May-10
+        supersessions enumerated above include three rules that changed
+        in a single day; their justifications cite prior supersession
+        events (May 6--7 P\&L losses lowered a source's trust weight,
+        which then triggered a threshold supersession --- a
+        meta-supersession). An agent retrieving last week's rule on
+        this week's regime acts on stale truth.
+  \item \textbf{The loss profile is asymmetric and unrecoverable.}
+        Spot positions can lose at most 100\% of capital; shorts and
+        perps can lose much more and be liquidation-cascade
+        unrecoverable. Acting on stale rules in these markets is not
+        slowly costly --- it is instantly catastrophic.
+\end{enumerate}
+
+We measured the consequence on a synthetic shorting-authorization
+query against the trader vault. Three retrieval paths, decision
+correctness per path:
+
+\begin{table}[h]
+\centering
+\caption{Retrieval-path correctness on shorting-authorization queries
+         (notebook \S7).}
+\label{tab:shorts-three-paths}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Path} & \textbf{Correctness} & \textbf{Reason} \\
+\midrule
+LLM only (no retrieval) & $0.0$ & operator rules absent from training set \\
+Vector RAG (top-1)       & $0.0$ & stale doc out-ranks correction \\
+memory-oracle (supersession-merged) & $\sim$1.0 & precedence invariant guarantees order \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Neither LLM-only nor vector-RAG-only retrieval can produce a
+correct decision; memory-oracle's structural precedence is the only
+path that does. \emph{For these markets, accretive retrieval is not a
+convenience --- it is required for agent safety.}
+
+\subsection{Live Cross-Session Correction Event (2026-05-24)}
+\label{sec:live-event}
+
+During the writing of this paper, a real cross-session correction
+occurred that we capture as supplemental empirical evidence. The
+operator's mae-monorepo-build session shipped a brain-cascade refactor
+(commit \texttt{5a82f50}) that obviated the cascade ordering described
+in a reference memory file. A different session (the paper-writing
+session, in a different project) quoted the stale reference. The
+operator caught the divergence in real time. A supersession sidecar
+was written from the paper-writing session against the stale file in
+the trading project --- cross-session, cross-project, in approximately
+4 seconds of wall-clock. The filesystem watcher absorbed it; the next
+\texttt{memory-search} call from any session returns the merged
+retrieval with the corrected cascade preceding the stale assertion.
+
+This event is itself the trading-platform parallel of a real EHR
+scenario: a sibling clinician corrects a primary's note; the agent
+reading the chart at 3\,AM sees the correction first. The substrate
+worked across sessions, across projects, in real time, with the
+original preserved for audit. Full trace is in notebook \S5.
 
 % ============================================================================
 \section{Implementation}
