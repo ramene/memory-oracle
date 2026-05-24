@@ -29,3 +29,7 @@ packages/go-cli/vendor/
 **/build/
 **/.tamagui/
 **/web-build/
+
+# Notebook venvs
+notebooks/**/.venv/
+.venv/
