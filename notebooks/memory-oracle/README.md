@@ -2,12 +2,13 @@
 
 Companion notebooks to the Springer LNCS paper *Memory That Argues With Itself: Accretive Supersession for AI Agent Retrieval* (Ramene, 2026). **Public — anonymous Colab clicks work.**
 
-## Two notebooks, two case studies
+## Three notebooks, two case studies, one substrate
 
 | Notebook | Paper section | Open in Colab |
 |---|---|---|
-| **`empirical-evaluation.ipynb`** — substrate-level measurements (latency, precedence invariant, vector-RAG baseline, cross-session capture, self-improvement trail, three-tier comparison, lock-contention recovery) | §8 Empirical Evaluation | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/empirical-evaluation.ipynb) |
-| **`trading-case-study.ipynb`** — the second case study after clinical: synthetic Alex Cohen trader vault + N=1000 precedence verification + shorting-required three-path correctness + live cross-session correction trace | §6 Cross-Domain Generalization | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/trading-case-study.ipynb) |
+| **`clinical-case-study.ipynb`** — the canonical case study: synthetic Jane Doe patient vault + N=1000 precedence verification + ER-reversal vector-RAG baseline + dual-device demo trace + clinical-required three-path correctness | §5 Clinical Case Study | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/clinical-case-study.ipynb) |
+| **`trading-case-study.ipynb`** — the second case study: synthetic Alex Cohen trader vault + N=1000 precedence verification + shorting-required three-path correctness + live cross-session correction trace | §6 Cross-Domain Generalization | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/trading-case-study.ipynb) |
+| **`empirical-evaluation.ipynb`** — substrate-level measurements (latency, precedence invariant, vector-RAG baseline against operator corpus, cross-session capture, self-improvement trail, three-tier comparison, lock-contention recovery) | §8 Empirical Evaluation | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/empirical-evaluation.ipynb) |
 
 ## Three run modes (auto-detected)
 
