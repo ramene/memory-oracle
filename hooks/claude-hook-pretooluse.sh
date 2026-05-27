@@ -15,11 +15,26 @@
 # Companion to ~/.bin/claude-hook-session-start.sh. Day 14 of mae-ADR-001.
 
 set -u
-export PATH="/Users/ramene/.bin/google-cloud-sdk/bin:/Users/ramene/.nvm/versions/node/v23.11.1/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+# Portable PATH detection — Node (nvm + Homebrew + system), gcloud (optional).
+_oracle_setup_path() {
+  local p="${PATH:-/usr/local/bin:/usr/bin:/bin}"
+  if [ -d "$HOME/.nvm/versions/node" ]; then
+    local latest
+    latest=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | sort -V | tail -1)
+    [ -n "$latest" ] && p="$HOME/.nvm/versions/node/$latest/bin:$p"
+  fi
+  [ -d /opt/homebrew/bin ] && p="/opt/homebrew/bin:$p"
+  [ -d /usr/local/bin ]   && p="/usr/local/bin:$p"
+  [ -d "$HOME/.bin/google-cloud-sdk/bin" ] && p="$HOME/.bin/google-cloud-sdk/bin:$p"
+  [ -d "$HOME/google-cloud-sdk/bin" ]      && p="$HOME/google-cloud-sdk/bin:$p"
+  export PATH="$p"
+}
+_oracle_setup_path
 
 DEBUG_LOG="${HOME}/.claude/.hook-debug-pretool.log"
 MEMORY_SEARCH="${HOME}/.bin/memory-search.mjs"
-INDEX_DB="${HOME}/.local/share/journal/.memory-index.db"
+INDEX_DB="${MEMORY_INDEX_DB:-${HOME}/.local/share/journal/.memory-index.db}"
 
 # Watched ops CLIs — extend this list as new ones earn operator-curated memory
 WATCHED='^(gh|gcloud|aws|pulumi|kubectl|psql|pm2|docker|launchctl|terraform|helm|sqlite3)$'

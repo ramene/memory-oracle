@@ -39,7 +39,7 @@ When the retrieval engine fetches this file, it merges the amendment entries int
 ### Amendment 1 — 2026-05-12T22:23:49Z
 Corrected assertion: As of 2026-05-12, the brain pipeline PRIMARY is GPT-5.5 via
 mae-openai-proxy. mae-claude-proxy is now SECONDARY/FALLBACK.
-Live evidence: /Users/ramene/.bin/journal-digest-builder.mjs lines 45-83
+Live evidence: ~/.bin/journal-digest-builder.mjs lines 45-83
 Operator confirmed: 2026-05-16
 
 [original file content — preserved verbatim, read with the corrections above in mind]
@@ -150,4 +150,4 @@ Karpathy's autoresearch loops aimed at this and missed because they rewrote skil
 
 I'd love feedback. The repo is at [`github.com/ramene/memory-oracle`](https://github.com/ramene/memory-oracle). The clinical use case is open for co-authorship on the paper. The trading retrofit is an interesting orthogonal validation. If you're working on long-running AI agents in *any* domain where stale assertions are dangerous, I think this primitive is worth your weekend.
 
-— Ramene, Mérida, Mexico · 2026-05-17
+— Ramene · 2026-05-17

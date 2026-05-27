@@ -1,110 +1,203 @@
 # memory-oracle
 
-> Supersession-aware memory retrieval for AI coding agents. No vectors, no fine-tuning, no daemon — just BM25 over Markdown + additive correction sidecars + a SessionStart hook that primes every new session.
+> An accretive, evidence-bound memory substrate for AI agents. Plain markdown + dated amendment records + a deterministic merge — no vectors, no fine-tuning, no model in the retrieval loop.
 
-## The problem this solves
+## What this is
 
-Agents parrot stale memory files because nothing tells them the file is wrong.
+memory-oracle is the reference implementation of **Evidence-Bound Retrieval (EBR)** — a substrate that binds every retrieval to the most recent operator-authored evidence by construction. Not by similarity. Not by a trained critic. Not by reinforcement signal.
 
-You write a memory note today: *"the brain pipeline routes through `mae-claude-proxy` — never add `ANTHROPIC_API_KEY` fallback."* Two weeks later the architecture changes and the brain moves to a different proxy entirely. Tomorrow you ask an agent about the inference path; it reads the original file verbatim and confidently gives you the obsolete answer. You correct it. It apologizes. The file still says the wrong thing. The next session repeats the cycle.
+It is offered as a concrete realization of the **episodic memory layer** in [CoALA](https://arxiv.org/abs/2309.02427) (Sumers, Yao, Narasimhan, Griffiths — TMLR 2024) — Princeton's four-memory taxonomy for language agents (working / semantic / procedural / episodic).
 
-This is the **Bad Write-Back** failure mode: memory files calcify as authoritative truth long after the world moves on. Vector embeddings don't help — they retrieve the same stale file with high cosine similarity. Re-writing the file destroys provenance.
+## Papers
 
-## The pattern
+- ⭐ **[*Evidence-Bound Retrieval: A Substrate for CoALA's Episodic Memory Layer*](paper/coala-extension/main.tex)** — position paper extending CoALA's episodic layer with the EBR substrate. Theorem 1 (the structural precedence invariant). Composition with the other three CoALA memory types. Target venues: NeurIPS 2026 workshops (FMDM, R2-FM), ICLR 2027 workshop tracks, ACL position-paper track.
+- **[*Evidence-Bound Retrieval for Clinical AI: An Accretive Memory Substrate with Patient-Owned Keys*](paper/lncs/main.tex)** — full clinical-AI manuscript. Springer LNCS shape. Empirical evidence from N=1,000 queries plus a real-corpus probe. Clinical (warfarin → apixaban) and trading (KuCoin no-shorting rule) case studies.
 
-**Supersession sidecars** — additive `.jsonl` files that layer corrections beside the canonical memory file. The original is never edited. The retrieval CLI merges supersessions at read time and prepends a ⚠ Supersession Notice block so the agent sees the correction before it sees the stale claim.
+Companion CTA post: [*From Forgetting to Amending*](paper/blog/from-forgetting-to-amending.md).
+
+## The problem EBR solves
+
+Agents quote stale memory files because nothing tells them the file is wrong.
+
+A patient is on warfarin per a 2008 chart note. The 2024 cardiology consult switched her to apixaban — vitamin K does not reverse apixaban. Both notes are in the chart. The patient presents to the ER with active bleeding and the team asks the AI-augmented EHR for the reversal protocol. Vector RAG ranks the 2008 note higher because the older note is longer and the lexical overlap with the query is stronger. The team orders FFP and vitamin K. Neither works.
+
+This is the **Bad Write-Back** failure mode. Vector embeddings don't help — they retrieve the same stale file with high cosine similarity. Re-writing the canonical note destroys provenance. The right primitive is not a better retriever; it is a different file layout.
+
+## The mechanism — amendment records
+
+When the cardiologist makes the change, they write one JSON line into a sidecar beside the canonical note:
 
 ```
-~/.claude/projects/mae/memory/
-├── feedback_brain_pipeline.md                      # canonical (never edited)
-└── feedback_brain_pipeline.md.supersessions.jsonl  # additive corrections
+~/.claude/projects/<project>/memory/
+├── medication_anticoagulant.md                     # canonical, never edited
+└── medication_anticoagulant.md.amendments.jsonl    # corrections, append-only
 ```
 
-When `memory-search` returns this file, the merged output starts with:
+Each sidecar line records one dated, operator-authored correction:
+
+```json
+{
+  "amended_at":           "2026-03-14T11:02:00Z",
+  "amended_by":           "Dr. Reyes, MD",
+  "superseded_assertion": "Patient is on warfarin 5 mg/day.",
+  "corrected_assertion":  "Patient transitioned to apixaban 5 mg BID on 2026-03-12.",
+  "live_evidence":        "EHR/encounter/E-71412/note-2.txt#L42",
+  "operator_confirmed":   true
+}
+```
+
+When the retrieval CLI reads the file, it merges the amendments into the output **before** the canonical body. Any sequential reader — human or LLM — encounters the correction first. The canonical text is preserved verbatim, so an auditor in 2030 can see exactly what was once believed and exactly when it was corrected.
 
 ```
-## ⚠ Supersession Notice (1 record)
-This file contains content that has been superseded by later authoritative events.
+## ⚠ Amendment Notice (1 record)
 
-### Supersession 1 — 2026-05-12T22:23:49Z
-**Corrected assertion:** As of 2026-05-12, the brain path PRIMARY is GPT-5.5 via
-mae-openai-proxy. mae-claude-proxy is now SECONDARY/FALLBACK.
-**Live evidence:** /path/to/journal-digest-builder.mjs lines 45-83
-**Operator confirmed:** 2026-05-16
+### Amendment 1 — 2026-03-14T11:02:00Z
+Corrected assertion: Patient transitioned to apixaban 5 mg BID on 2026-03-12.
+Live evidence: EHR/encounter/E-71412/note-2.txt#L42
+Amended by: Dr. Reyes, MD
 ---
-[original file content, preserved verbatim]
+[canonical file content — preserved verbatim, read with the corrections above in mind]
 ```
 
-The agent reads the correction first, the original second. Stale assertions can't fool retrieval because the correction is authored adjacent to the source, not in place of it.
+The precedence is **structural**, not statistical (Theorem 1 of the position paper): the merge routine prepends amendments by construction. No critic forward pass, no similarity tiebreak, no reinforcement loop.
 
 ## Architecture
 
-Three SQLite FTS5 layers indexed at write-time:
+```
+canonical Markdown file  +  amendment sidecar (JSONL)
+                        ↓
+                memory-merge.mjs   (precedence invariant: amendments prepended)
+                        ↓
+              SQLite FTS5 index    ($MEMORY_INDEX_DB)
+                        ↓
+       memory-search (BM25, Tier 1)  |  memory-cite (forensic, Tier 2)
+                        ↓
+                Claude Code agent context
+```
 
-| Layer | Source | Purpose |
+Three retrieval tiers:
+
+| Tier | Tool | Purpose | Typical latency |
+|---|---|---|---|
+| **1 — BM25 keyword** | `memory-search.mjs <query>` | "What is the current value of X?" | ~250 ms |
+| **1.5 — Structural** | SQL over the `surface_map` table | "Which files in project P were amended this week?" | ~40 ms |
+| **2 — Forensic** | `memory-cite <session-id>#L<line>` | Recover a file's full amendment timeline | ~10 s |
+
+Plus a **SessionStart hook** that auto-primes every new Claude Code session with amendment-aware context before the first prompt is sent.
+
+## Empirical results
+
+From the papers + the [companion notebooks](notebooks/memory-oracle/):
+
+- **Synthetic vault stress test, N=1,000 queries** (clinical + trading): EBR returns the post-amendment assertion on **100.0%** of queries; vector-RAG on **10%**; a control LLM with no retrieval on **0%**. Required-litmus gap: **0.9**.
+- **Real-corpus probe** — the author's own production substrate, **239 documents** across **21 projects** over **108 days**: **6/6** known cross-session corrections retrievable in BM25 search; median latency **257 ms**.
+- **Latency** (Go binary, cold start): **21.68 ms** median, 51 ms p95. **6.0×** speedup vs. the Node CLI cold path.
+- **Capture freshness**: **366 ms** median between an operator writing an amendment and the index returning it.
+- **Index hygiene under contention**: 30/30 concurrent amendment writes indexed; 0 data loss; 7/30 events incurred transient SQLite-busy retries the substrate handled internally.
+
+Full numbers + figures in [`paper/lncs/main.tex`](paper/lncs/main.tex) §5–§8.
+
+## Notebooks (Colab Free, anonymous-clickable)
+
+| Notebook | Paper section | Colab |
 |---|---|---|
-| **Curated memory** | `~/.claude/projects/*/memory/*.md` | Operator-authored truth |
-| **Supersession sidecars** | `*.supersessions.jsonl` next to each file | Additive corrections (never overwrite) |
-| **Journal digests** | `~/.local/share/journal/digests/*.md` | Per-day transcript-distilled rollups |
-
-Plus two retrieval CLIs:
-
-- **`memory-search`** — BM25 query, supersession-merged, budget-capped (default 30 KB)
-- **`memory-cite`** — bridge to raw transcripts (Tier 2) without indexing the firehose
-
-Plus a SessionStart hook that auto-primes every new Claude Code session with relevant supersession-aware context before the first prompt is sent.
-
-See [`docs/RETRIEVAL-STACK-ADR.md`](docs/RETRIEVAL-STACK-ADR.md) for the architectural decision record explaining why this design (γ) was chosen over pgvector (α) and the hybrid kitchen-sink (β).
+| `clinical-case-study.ipynb` | §5 Clinical Case Study | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/clinical-case-study.ipynb) |
+| `trading-case-study.ipynb` | §6 Cross-Domain Generalization | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/trading-case-study.ipynb) |
+| `empirical-evaluation.ipynb` | §8 Empirical Evaluation | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ramene/memory-oracle/blob/main/notebooks/memory-oracle/empirical-evaluation.ipynb) |
 
 ## Install
 
 ```bash
+git clone https://github.com/ramene/memory-oracle
+cd memory-oracle
 ./install.sh
 ```
 
 This:
-- Copies `bin/*` to `~/.bin/`
-- Installs the SessionStart hook to your Claude Code `~/.claude/settings.json`
-- Loads the launchd plist (macOS) or systemd unit (Linux) for the fs-watcher
+- Copies `bin/*` to `~/.bin/` (`memory-search.mjs`, `memory-index-build.mjs`, `memory-merge.mjs`, `memory-cite.mjs`, `memory-structural-index.mjs`)
+- Installs the SessionStart hook to `~/.bin/claude-hook-session-start.sh`
+- (macOS) loads the launchd plist for the fs-watcher that incrementally re-indexes after every memory-file write
+- (Linux) emits the systemd unit + activation command at install time
 - Builds the initial FTS5 index from `~/.claude/projects/*/memory/`
+
+Idempotent. Re-running upgrades in place. Configurable: set `MEMORY_INDEX_DB` and `CLAUDE_PROJECTS_ROOT` in your shell rc to override defaults.
 
 ## Usage
 
 ```bash
-# Manual query
-memory-search "OpenAI proxy deploy"
+# Query — amendment-merged, budget-capped, BM25-ranked
+memory-search "deploy process safety rules" --k=8
 
-# Verify a supersession citation against the raw transcript
+# Verify an amendment citation against the raw transcript (Tier 2 forensic)
 memory-cite session-id-here#L94616 --context 3
 
-# Add a supersession sidecar (when you observe a memory file asserting something stale)
-cat <<EOF >> ~/.claude/projects/PROJECT/memory/FILE.md.supersessions.jsonl
-{"superseded_at":"$(date -u +%FT%TZ)","scope":"what claim is invalidated","corrected_assertion":"the new truth","live_evidence":["/path/to/verify"],"operator_confirmed":"$(date -u +%FT%TZ)","retention_policy":"when to retire"}
+# Write a new amendment when you observe a file asserting something stale
+cat <<EOF >> ~/.claude/projects/<project>/memory/<file>.md.amendments.jsonl
+{"amended_at":"$(date -u +%FT%TZ)","superseded_assertion":"<the stale claim>","corrected_assertion":"<the new truth>","live_evidence":["/path/to/verify"],"operator_confirmed":"$(date -u +%FT%TZ)","retention_policy":"indefinite"}
 EOF
-# The fs-watcher picks it up and rebuilds the index in ~1s
+# The fs-watcher picks it up and rebuilds the index in ~1 second.
 ```
+
+The canonical file is **never deleted or edited**. Amendments are additive. Audit-friendly, fully reversible (delete one JSONL line to undo).
 
 ## Why this isn't another RAG library
 
-| | Vector RAG (pgvector, LangMem, etc.) | memory-oracle |
+| | Vector RAG (pgvector, LangMem, MemGPT, …) | memory-oracle / EBR |
 |---|---|---|
-| Storage | Embeddings of chunks | Plain markdown + JSONL sidecars |
-| Retrieval | Cosine similarity | BM25 keyword |
-| Correction | Re-embed updated chunk (loses provenance) | Append sidecar (preserves both) |
-| Compute | GPU for embedding, network for queries | None — SQLite CLI |
-| Stale-file fooling | Yes (retrieves the embedding of the stale content) | No (correction merged at read time) |
-| Self-extending | No (you must re-embed) | Yes (agents write new memory mid-session, indexed in ~1s) |
+| Storage | Embeddings of chunks in a vector DB | Plain Markdown + JSONL sidecars on disk |
+| Retrieval primitive | Cosine similarity over learned embeddings | BM25 keyword + structural precedence merge |
+| Correction mechanism | Re-embed the updated chunk (provenance lost) | Append an amendment record (provenance preserved) |
+| Compute requirements | GPU for embedding, network for queries | None — SQLite CLI |
+| Stale-file fooling | Yes — old embedding still ranks high | No — amendments prepended by construction |
+| Self-extending | No — you must re-embed | Yes — fs-watcher absorbs new files in ~1 s |
 | Lines of code | ~10K + dependencies | ~1.5K, zero deps beyond `sqlite3` + `node` |
+| Audit trail | Lost on re-embed | Full — canonical + dated amendment chain |
 
-See [`docs/COMPARISON.md`](docs/COMPARISON.md) for the full breakdown, including the contrast with Karpathy-style autoresearch loops.
+Full comparison + the contrast with learned distillation approaches (CRAG, Self-RAG, FLARE) lives in [`docs/COMPARISON.md`](docs/COMPARISON.md) and the position paper's Related Work.
 
-## Proven at scale
+## Composition with the CoALA framework
 
-- **Corpus today**: 186 documents, 97-day span, 19 projects
-- **Index size**: <10 MB
-- **Query latency**: <100 ms (cold), <30 ms (warm)
-- **Re-index after write**: <1 second via fs-watcher
-- **Self-extension proof**: agents primed with supersession-aware retrieval write new memory files during work; the fs-watcher absorbs them; the next session retrieves them. The corpus is self-extending. Documented in `docs/examples/self-extending-loop.md`.
+EBR is the **substrate for the episodic layer** of [CoALA](https://arxiv.org/abs/2309.02427). It does not replace the other three layers; it composes with them:
+
+| CoALA layer | What EBR does to it |
+|---|---|
+| **Semantic** (durable knowledge, `CLAUDE.md`, project docs) | Amendments attach to canonical semantic files — the file is never edited; the correction wins at retrieval time. |
+| **Procedural** (skills, `skill.md`) | A skill can itself be amended; procedural corrections do not require modifying the canonical instructions. |
+| **Working** (the context window) | EBR delivers amendment-merged retrievals into working memory the same way RAG does — but the prepended amendments make the most recent operator-authored correction visible to the agent first. |
+| **Episodic** (CoALA's *"hardest layer"*) | EBR is the substrate. The deletion / obsolescence problem (CoALA's open question) is resolved structurally: nothing is deleted, amendments are accreted, precedence is enforced by the merge routine. |
+
+## Repository layout
+
+```
+memory-oracle/
+├── bin/                          # Node CLIs: memory-search, memory-merge, memory-index-build, memory-cite
+├── hooks/                        # Claude Code SessionStart + PreToolUse hooks (portable)
+├── runtime/                      # launchd plist (macOS) + systemd unit (Linux) for the fs-watcher
+├── skills/memory-search/         # Installable Skill (SKILL.md)
+├── notebooks/memory-oracle/      # Colab-runnable clinical + trading + empirical-evaluation notebooks
+├── paper/
+│   ├── coala-extension/          # ⭐ Position paper (CoALA episodic-memory substrate)
+│   ├── lncs/                     #    Clinical-AI manuscript (Springer LNCS)
+│   ├── blog/                     #    Companion CTA posts
+│   ├── figures/                  #    Paper figures (PNG)
+│   └── EVIDENCE-OF-PLATFORM.md   #    The substrate's self-evidence — why it works in production
+├── docs/                         # Genesis docs: ADR, retrieval-contract spec, failure-mode triage
+├── packages/go-cli/              # Standalone Go binary of memory-search (single static executable)
+├── tests/                        # Litmus scripts proving the precedence invariant holds
+├── install.sh                    # Idempotent installer
+└── LICENSE                       # MIT
+```
+
+## Status
+
+| Surface | State |
+|---|---|
+| Substrate code (`bin/`, `hooks/`, `runtime/`) | Stable, in daily use |
+| Position paper (CoALA extension) | Drafted, workshop-submission-ready |
+| Clinical-AI manuscript (LNCS) | Drafted, submission-ready |
+| Notebooks (clinical, trading, empirical) | Colab-runnable, paper-quality measurements |
+| Reference implementation | MIT-licensed, public |
+| Independent reproduction | **Open call** — fork the repo, run the notebooks on your own corpus, [open an issue](https://github.com/ramene/memory-oracle/issues) with your numbers |
 
 ## License
 
@@ -112,4 +205,8 @@ MIT.
 
 ## Origin
 
-Built 2026-05-16 in a single session to solve the failure mode of "agent quotes stale memory files." The full design rationale (Retrieval Contract Spec, Failure Triage, ADR) lives in `docs/`. Direct ancestor: Nate Jones's "The New RAG War Is Not About Vectors" — the systems-design framing that crystallized why vector retrieval was the wrong primitive for AI-coding-agent memory.
+memory-oracle began as a one-session fix for a single observed failure: an AI agent confidently quoting a memory file two weeks after the world had moved on. The substrate evolved over eleven days into a Springer-LNCS clinical-AI paper, a CoALA position paper, three Colab-runnable case-study notebooks, a real-corpus probe of the author's own production memory bank (6/6 retrievable cross-session corrections), and an MIT-licensed reference implementation.
+
+The originating incident-triage, the retrieval-stack ADR, and the failure-mode taxonomy live in [`docs/`](docs/) as a record of how the substrate was reasoned into existence.
+
+Direct intellectual ancestor: Nate Jones's [*The New RAG War Is Not About Vectors*](https://natebjones.substack.com/p/the-new-rag-war-is-not-about-vectors) — the systems framing that named why vector retrieval was the wrong primitive for AI-agent memory. The substrate is the architecture that answers his framing.

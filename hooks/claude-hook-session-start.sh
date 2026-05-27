@@ -16,7 +16,23 @@
 # Relaxed strict mode — capture errors to log rather than aborting silently.
 # Claude Code may strip env, so PATH is set explicitly for python3/node/etc.
 set -u
-export PATH="/Users/ramene/.bin/google-cloud-sdk/bin:/Users/ramene/.nvm/versions/node/v23.11.1/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+# Portable PATH detection — Node (nvm + Homebrew + system), gcloud (optional).
+# Operators with custom layouts can preempt this by setting PATH before invocation.
+_oracle_setup_path() {
+  local p="${PATH:-/usr/local/bin:/usr/bin:/bin}"
+  if [ -d "$HOME/.nvm/versions/node" ]; then
+    local latest
+    latest=$(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | sort -V | tail -1)
+    [ -n "$latest" ] && p="$HOME/.nvm/versions/node/$latest/bin:$p"
+  fi
+  [ -d /opt/homebrew/bin ] && p="/opt/homebrew/bin:$p"
+  [ -d /usr/local/bin ]   && p="/usr/local/bin:$p"
+  [ -d "$HOME/.bin/google-cloud-sdk/bin" ] && p="$HOME/.bin/google-cloud-sdk/bin:$p"
+  [ -d "$HOME/google-cloud-sdk/bin" ]      && p="$HOME/google-cloud-sdk/bin:$p"
+  export PATH="$p"
+}
+_oracle_setup_path
 
 DEBUG_LOG="${HOME}/.claude/.hook-debug.log"
 MEMORY_SEARCH="${HOME}/.bin/memory-search.mjs"
@@ -37,14 +53,20 @@ SOURCE=$(echo "$PAYLOAD" | python3 -c "import sys,json;d=json.load(sys.stdin);pr
 CWD=$(echo "$PAYLOAD" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('cwd',''))" 2>/dev/null || echo "")
 TRANSCRIPT=$(echo "$PAYLOAD" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('transcript_path',''))" 2>/dev/null || echo "")
 
-# Derive project token from cwd — project_root → memory-dir mapping
-# Default to a broad query if cwd doesn't match a known project
-PROJECT_KEY=""
-case "$CWD" in
-  *mae-monorepo-build*) PROJECT_KEY="-Users-ramene--remote--plans-mae-monorepo-build" ;;
-  *builds.karve.ai*)    PROJECT_KEY="-Users-ramene--remote--builds-karve-ai" ;;
-  *)                    PROJECT_KEY="" ;;
-esac
+# Derive project token from cwd — Claude Code encodes the project dir as a key under
+# ~/.claude/projects/<key>/. The key is "${cwd//\//-}" (slashes replaced with dashes,
+# leading slash producing a leading dash).
+#
+# Optional: extend with operator-specific aliases by sourcing a config file. Example:
+#   ~/.config/memory-oracle/project-aliases.sh
+#       case "$CWD" in
+#         */my-monorepo*) PROJECT_KEY="-path-to-my-monorepo" ;;
+#       esac
+PROJECT_KEY="${CWD//\//-}"
+if [ -f "$HOME/.config/memory-oracle/project-aliases.sh" ]; then
+  # shellcheck disable=SC1090
+  source "$HOME/.config/memory-oracle/project-aliases.sh"
+fi
 
 # For post-compaction resume, pull a USABLE recent user prompt (not task-notifications
 # or system-reminders) and reduce it to a keyword query.

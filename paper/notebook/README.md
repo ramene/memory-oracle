@@ -5,10 +5,11 @@ The runnable notebook now lives in [`ramene/mae-notebooks`](https://github.com/r
 This directory retains only the produced figures (`../figures/`) that the LaTeX build needs via `\includegraphics{}`. To regenerate them:
 
 ```bash
-cd ~/.remote/github.com/@ramene/mae-notebooks/memory-oracle
+# from the mae-notebooks repo root
+cd memory-oracle
 jupyter nbconvert --to notebook --execute empirical-evaluation.ipynb \
   --output empirical-evaluation.executed.ipynb
-cp figures/F3-latency.png ../../memory-oracle/paper/figures/
+cp figures/F3-latency.png /path/to/memory-oracle/paper/figures/
 ```
 
 See `mae-notebooks/memory-oracle/README.md` for full instructions.
