@@ -30,7 +30,16 @@ import { execSync, spawnSync } from 'node:child_process';
 const DB_PATH = process.env.MEMORY_INDEX_DB || join(process.env.HOME, '.local', 'share', 'journal', '.memory-index.db');
 const PROJECTS_ROOT = process.env.CLAUDE_PROJECTS_ROOT || join(process.env.HOME, '.claude', 'projects');
 const DIGESTS_ROOT = process.env.JOURNAL_DIGESTS_ROOT || join(process.env.HOME, '.local', 'share', 'journal', 'digests');
-const MERGE_CLI = join(process.env.HOME, '.bin', 'memory-merge.mjs');
+// MERGE_CLI auto-detect: env override > adjacent (same bin/ dir as this script) > ~/.bin
+// Adjacent is the right default for cloned-repo runs (Deepnote, Colab, CI); the ~/.bin
+// fallback supports the operator's local install. Silent fallback to readFile-only on
+// failure was the source of the 2026-05-27 "15.12% precedence rate" Deepnote bug — the
+// merge subprocess was never finding ~/.bin/memory-merge.mjs on the hosted runtime.
+import { fileURLToPath } from 'node:url';
+const _scriptDir = dirname(fileURLToPath(import.meta.url));
+const _adjacentMerge = join(_scriptDir, 'memory-merge.mjs');
+const MERGE_CLI = process.env.MEMORY_MERGE_CLI
+  || (existsSync(_adjacentMerge) ? _adjacentMerge : join(process.env.HOME, '.bin', 'memory-merge.mjs'));
 
 const ARGS = process.argv.slice(2);
 
@@ -166,8 +175,14 @@ function listDigestFiles() {
 }
 
 function getMerged(filePath) {
+  if (!existsSync(MERGE_CLI)) {
+    // Loud warning — silent fallback to canonical-only was a paper-breaking bug on 2026-05-27.
+    console.error(`[index] WARN: memory-merge.mjs not found at ${MERGE_CLI} — amendment sidecars will NOT be merged. Set MEMORY_MERGE_CLI env var or place memory-merge.mjs adjacent to memory-index-build.mjs.`);
+    return readFileSync(filePath, 'utf8');
+  }
   const r = spawnSync('node', [MERGE_CLI, filePath], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
   if (r.status === 0) return r.stdout;
+  console.error(`[index] WARN: memory-merge.mjs exit=${r.status} for ${filePath}; canonical-only fallback. stderr: ${(r.stderr || '').slice(0, 200)}`);
   return readFileSync(filePath, 'utf8');
 }
 
