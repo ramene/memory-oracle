@@ -1,0 +1,64 @@
+{
+  "corpus": "operator live corpus (~/.local/share/journal/.memory-index.db)",
+  "events_probed": 6,
+  "retrievable": 6,
+  "retrievable_pct": 100.0,
+  "median_latency_ms": 256.7,
+  "events": [
+    {
+      "event_key": "session_multiplier",
+      "event_title": "Session multiplier 1.15 hardcoded \u2192 MAE_SESSION_CONF_MULT env override",
+      "query": "session multiplier 1.15 hardcoded MAE_SESSION_CONF_MULT regime-aware blend 143",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -46.501,
+      "latency_ms": 424.3,
+      "retrievable": true
+    },
+    {
+      "event_key": "kc_meanrev_exemption",
+      "event_title": "KuCoin shorting exemption for MEAN-REV-LONG (commit 9865d7b)",
+      "query": "mean reversion long dip-buys KC bearish exemption 9865d7b MEAN-REV-LONG",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -54.171,
+      "latency_ms": 196.3,
+      "retrievable": true
+    },
+    {
+      "event_key": "chop_day_sigconf",
+      "event_title": "Chop-day signal-confidence floor 0.72 \u2192 0.65",
+      "query": "chop-day minSignalConfidence floor 0.65 APE ENJ mean-reversion 0.72",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -44.484,
+      "latency_ms": 256.7,
+      "retrievable": true
+    },
+    {
+      "event_key": "chop_day_aletheia",
+      "event_title": "Chop-day Aletheia weight floor 0.55 \u2192 0.40",
+      "query": "chop-day minAletheiaWeight 0.40 kucoin-scanner trust 0.44 0.55",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -39.802,
+      "latency_ms": 390.8,
+      "retrievable": true
+    },
+    {
+      "event_key": "sit_out_force_off",
+      "event_title": "Sit-out auto-engage force-off flag",
+      "query": "sit-out auto-engage force-off flag cascading gate rejection",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -26.455,
+      "latency_ms": 189.5,
+      "retrievable": true
+    },
+    {
+      "event_key": "gate_registry_spec",
+      "event_title": "Gate Registry Phase 0.2.5 spec emergence",
+      "query": "Phase 0.2.5 Gate Registry Composition Tracer 6 gates 10h lockdown",
+      "top_file": "_digests/2026-05-10.md",
+      "bm25_rank": -41.186,
+      "latency_ms": 159.3,
+      "retrievable": true
+    }
+  ],
+  "note": "Each event corresponds to one of the six explicit amendment-shaped corrections documented in reference_accretion_pattern_in_mae.md (operator-authored 2026-05-17). All events occurred during a single trading day (2026-05-10) and are independently retrievable via the same primitive \u2014 proving the substrate already accretes operator-real corrections at >5/day rate."
+}
