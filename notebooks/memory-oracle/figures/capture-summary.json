@@ -1,0 +1,10 @@
+{
+  "N": 20,
+  "captured": 20,
+  "lost": 0,
+  "capture_pct": 100.0,
+  "capture_ms_min": 209.4,
+  "capture_ms_median": 366.2,
+  "capture_ms_p95": 450.7,
+  "capture_ms_max": 530.7
+}

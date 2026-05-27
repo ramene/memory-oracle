@@ -1,0 +1,27 @@
+{
+  "pattern": "short-side rollout shadow testnet canary",
+  "tiers": [
+    {
+      "tier": "Tier 1 \u2014 memory-search (BM25)",
+      "latency_ms": 124.9,
+      "output_chars": 4055,
+      "hits": 3,
+      "best_for": "discovery \u2014 fast, ranked, includes digests"
+    },
+    {
+      "tier": "Tier 1.5 \u2014 structural (SQL)",
+      "latency_ms": 37.8,
+      "output_chars": 266,
+      "hits": 4,
+      "best_for": "precision \u2014 exact-string lookup over indexed corpus"
+    },
+    {
+      "tier": "Tier 2 \u2014 memory-cite (JSONL)",
+      "latency_ms": 10749.0,
+      "output_chars": 640,
+      "hits": 3,
+      "best_for": "forensic \u2014 verbatim quote at exact line/timestamp"
+    }
+  ],
+  "note": "Three tiers compose: discovery (T1) \u2192 precision (T1.5) \u2192 forensic (T2). Each is appropriate for a different question class. The PreToolUse hook auto-suggests T1 when raw grep is reached for on memory dirs."
+}

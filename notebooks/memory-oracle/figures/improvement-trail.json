@@ -1,0 +1,5 @@
+{
+  "improvements_logged": 6,
+  "memory_search_retrievable": 6,
+  "note": "Substrate is reflective \u2014 improvements are themselves indexed and surfaceable via the same retrieval primitive."
+}

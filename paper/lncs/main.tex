@@ -811,23 +811,52 @@ among the four that produces a correct decision by construction.
 
 \subsection{Corpus and Setup}
 
-We evaluate on the operator's actual development memory corpus: 186 documents
-(176 curated memory files + 10 journal digests) spanning 97 days across 19
-projects. Index size is approximately 5\,MB. All measurements were taken on
-an Apple M-series MacBook (24\,GB RAM, macOS 14) using the Node and Go
-reference implementations against the live SQLite FTS5 index.
+We evaluate on the operator's actual development memory corpus: $239$
+documents across $21$ projects, spanning $108$ days. Index size is
+approximately $2.6$\,MB (SQLite FTS5 with WAL journaling). All
+measurements taken on an Apple M-series MacBook (24\,GB RAM, macOS~14)
+using the Node and Go reference implementations against the live
+index. Raw output in
+\texttt{notebooks/memory-oracle/figures/corpus-summary.json}.
 
 \subsection{Retrieval Latency}
+\label{sec:latency}
 
 Figure~\ref{fig:latency} reports per-query latency distributions for cold
-and warm cache states across both reference implementations.
+and warm cache states across both reference implementations, measured
+across $300$ queries per implementation $\times$ cache state ($10$ queries
+$\times$ $30$ trials).
+
+\begin{table}[h]
+\centering
+\caption{Per-query retrieval latency (ms) on the operator's $239$-document
+         live corpus. Speedup column reports the cold-cache ratio.
+         Measurements from \texttt{latency-summary.json}.}
+\label{tab:latency-numbers}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Implementation} & \textbf{Cache} & \textbf{Median (ms)} & \textbf{Mean (ms)} & \textbf{Std (ms)} \\
+\midrule
+Node    & cold & $130.77$ & $134.08$ & $22.64$ \\
+Node    & warm & $125.04$ & $139.35$ & $50.31$ \\
+Go      & cold & $21.68$  & $24.30$  & $10.35$ \\
+Go      & warm & $20.71$  & $22.03$  & $5.37$  \\
+\midrule
+\multicolumn{2}{r}{\textbf{Speedup (Go vs Node, cold)}} & \multicolumn{3}{l}{$\mathbf{6.0\times}$ at median} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{../figures/F3-latency.png}
-  \caption{Per-query retrieval latency distribution. Cold-cache p50: Node
-           238\,ms, Go 23\,ms (10$\times$ speedup). Warm-cache p50: both
-           $<$30\,ms. Median bundle size 5--15\,KB depending on budget.}
+  \caption{Per-query retrieval latency distribution against the operator's
+           $239$-document live corpus. Cold-cache median: Node $130.77$\,ms,
+           Go $21.68$\,ms ($6.0\times$ speedup). Warm-cache median: Node
+           $125.04$\,ms, Go $20.71$\,ms. The Go reference compiles to a
+           single static binary (no Node bootstrap on cold start), which
+           is the source of the speedup.}
   \label{fig:latency}
 \end{figure}
 
@@ -908,11 +937,13 @@ visualizes the gap. Raw output in
 \end{figure}
 
 \subsection{Self-Extension Rate}
+\label{sec:self-extension}
 
 Across a 96-hour observation window, the operator's session activity wrote
-8 new memory files; the fs-watcher indexed each within 1.2\,s (median 0.4\,s)
-of authorship. Subsequent retrieval queries within 5\,s of authoring
-correctly returned the new content.
+$15$ new memory files spanning $2$ projects. Each was indexed by the
+fs-watcher and queryable within the next retrieval call against the live
+SQLite index. Raw output in
+\texttt{notebooks/memory-oracle/figures/growth-summary.json}.
 
 \subsection{Cross-Session Capture Invariant}
 \label{sec:cross-session}
@@ -927,24 +958,28 @@ hook. It watches every \texttt{\textasciitilde/.claude/projects/*/memory/}
 directory and ingests writes regardless of which Claude Code instance
 authored them.
 
-We measured this empirically by running 20 trials (notebook \S8.6) in
-which a separate session wrote a memory file and the live
-SQLite index was polled at 100\,ms intervals until the file appeared in
-\texttt{memory\_file}. Every trial captured ($100\%$, $N=20$), with median
-end-to-end latency 1.4\,s and 95\textsuperscript{th}-percentile 2.6\,s
-(empirically: depends on
-filesystem coalescence + FTS5 rebuild cost on a $\sim$200-document index).
-Figure~\ref{fig:capture} reports the distribution. This is the property
-that makes a multi-session operator workflow coherent: the agent in one
-terminal sees corrections written by a sibling agent in another terminal
+We measured this empirically by running $N{=}20$ trials (notebook \S8.6)
+in which a separate session wrote a memory file and the live SQLite index
+was polled at $100$\,ms intervals until the file appeared in
+\texttt{memory\_file}. Every trial captured ($100\%$, $20/20$), with
+median end-to-end latency $366$\,ms (min $209$\,ms, $95$\textsuperscript{th}
+percentile $451$\,ms, max $531$\,ms). Latency is dominated by filesystem
+coalescence + FTS5 rebuild cost on the live $239$-document index. Raw
+output in \texttt{notebooks/memory-oracle/figures/capture-summary.json}.
+Figure~\ref{fig:capture} reports the full distribution. This is the
+property that makes a multi-session operator workflow coherent: the agent
+in one terminal sees corrections written by a sibling agent in another
+terminal
 within seconds.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{../figures/F4-capture-latency.png}
-  \caption{Cross-session capture latency. The fs-watcher absorbs writes
-           from any Claude session and makes them queryable to any other
-           within median 1.4\,s. The $100\%$ capture rate is itself an
+  \caption{Cross-session capture latency on the operator's live
+           $239$-document index. The fs-watcher absorbs writes from any
+           Claude session and makes them queryable to any other within
+           median $366$\,ms, $95$\textsuperscript{th}-percentile $451$\,ms.
+           The $100\%$ capture rate ($20/20$ trials) is itself an
            operational invariant: writes are never dropped, even under the
            concurrent-write conditions of \S\ref{sec:contention}.}
   \label{fig:capture}
@@ -957,9 +992,14 @@ Every observed failure mode of the substrate over the development window
 was captured as a memory file (typed \texttt{feedback} or \texttt{reference})
 and codified as either a code change, a hook extension, or a documented
 operational rule. Crucially, each improvement is itself retrievable via
-the same primitive --- the substrate is reflective. Figure~\ref{fig:improvement}
-plots the cadence: six documented improvements over six days, each preceded
-by an observed failure mode and followed by an empirically-verified fix.
+the same primitive --- the substrate is reflective. We verified this
+empirically by enumerating the six documented improvements and querying
+each via \texttt{memory-search}; $6/6$ returned the expected memory file
+($100\%$ reflexive recall). Raw output in
+\texttt{notebooks/memory-oracle/figures/improvement-trail.json}.
+Figure~\ref{fig:improvement} plots the cadence: six documented improvements
+over six days, each preceded by an observed failure mode and followed by
+an empirically-verified fix.
 
 \begin{figure}[h]
   \centering
@@ -986,19 +1026,30 @@ different question class:
 
 \begin{table}[h]
 \centering
-\caption{Three-tier retrieval. Each tier is appropriate for a different question class.}
+\caption{Three-tier retrieval. Each tier is appropriate for a different
+         question class. Measured latencies are on the operator's live
+         corpus ($239$ files; Tier~$2$ runs against an $870$\,MB session
+         JSONL). Raw output in
+         \texttt{notebooks/memory-oracle/figures/tier-comparison.json}.}
 \label{tab:tiers}
 \small
-\begin{tabular}{llll}
+\begin{tabular}{lllrl}
 \toprule
-\textbf{Tier} & \textbf{Tool} & \textbf{Target corpus} & \textbf{Best for} \\
+\textbf{Tier} & \textbf{Tool} & \textbf{Target corpus} & \textbf{Latency} & \textbf{Best for} \\
 \midrule
-1   & \texttt{memory-search} (BM25 over FTS5) & Memory files + journal digests & Discovery (fast, ranked) \\
-1.5 & Structural index (\texttt{surface\_map}) & Exact-string lookup over the indexed corpus & Precision (commands, paths) \\
-2   & \texttt{memory-cite} (streamed JSONL) & Raw session transcripts & Forensic (verbatim at line/timestamp) \\
+1    & \texttt{memory-search} (BM25 over FTS5)      & Memory files + journal digests           & $125$\,ms     & Discovery (fast, ranked) \\
+1.5  & Structural index (\texttt{surface\_map})     & Exact-string lookup over indexed corpus & $38$\,ms     & Precision (commands, paths) \\
+2    & \texttt{memory-cite} (streamed JSONL)        & Raw session transcripts                  & $10.7$\,s    & Forensic (verbatim quote at line/timestamp) \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+Tier latencies are asymmetric by design: Tier 1.5 (structural index, exact
+SQL match) at $38$\,ms is the cheapest because it bypasses BM25 ranking;
+Tier 1 (memory-search) at $125$\,ms includes ranking + amendment merge;
+Tier 2 (memory-cite) at $10.7$\,s reflects the streamed JSONL grep over
+$870$\,MB of raw transcript --- the price of recovering an exact
+operator utterance at known timestamp.
 
 Tiers compose: a fast Tier 1 hit saves the forensic Tier 2 cost. When
 Tier 1 returns nothing, Tier 2 is still there. The PreToolUse hook
@@ -1019,13 +1070,18 @@ was to prepend the \texttt{.timeout 5000} dot-command to every
 must happen \emph{before} parse-time schema lookups, so the in-stdin
 \texttt{PRAGMA} variant does not work; the dot-command does.
 
-Post-fix, under 3 bursts of 10 concurrent writes each (30 total),
-transient lock errors dropped to $\sim$10\% of attempts, with every file
-ultimately landing in the index via the next watcher tick (FTS5 rebuild
-is convergent). Net data loss: zero. This is documented to flag a class
-of substrate-reliability work that has no precedent in vector-RAG systems
-because they do not face the same write-concurrency profile: in our
-substrate, every operator session is a potential writer.
+Post-fix, under $3$ bursts of $10$ concurrent writes each ($30$ total),
+the watcher logged $7$ transient \texttt{database is locked} errors
+during burst windows ($23.3\%$ transient rate vs the $47.5\%$ pre-fix
+baseline). Critically, every one of the $30$ files \emph{ultimately
+landed in the index} via the next watcher tick because the FTS5 rebuild
+trigger is convergent: \textbf{net data loss = zero, eventual capture =
+$100\%$ ($30/30$)}. Raw output in
+\texttt{notebooks/memory-oracle/figures/contention-summary.json}. We
+document this to flag a class of substrate-reliability work that has no
+precedent in vector-RAG systems because they do not face the same
+write-concurrency profile: in our substrate, every operator session is
+a potential concurrent writer.
 
 % ============================================================================
 \section{Discussion}

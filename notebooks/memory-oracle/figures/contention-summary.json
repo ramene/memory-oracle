@@ -1,0 +1,10 @@
+{
+  "bursts": 3,
+  "writes_per_burst": 10,
+  "total_writes": 30,
+  "total_indexed": 30,
+  "total_lock_errors": 7,
+  "avg_capture_pct": 100.0,
+  "baseline_failure_pct_pre_fix": 47.5,
+  "note": "Lock errors that occur are TRANSIENT \u2014 the FTS rebuild trigger is convergent; the next watcher tick recovers the missed index entry. Net data loss observed in this experiment: 0."
+}
