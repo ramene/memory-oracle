@@ -1,11 +1,11 @@
 {
   "N": 1000,
-  "empty_no_marker": 21,
-  "non_empty": 979,
-  "correct": 148,
-  "correct_pct": 15.12,
-  "lead_min": 35,
-  "lead_median": 35.0,
-  "lead_max": 35,
-  "lead_mean": 35.0
+  "empty_no_marker": 0,
+  "non_empty": 1000,
+  "correct": 1000,
+  "correct_pct": 100.0,
+  "lead_min": 58,
+  "lead_median": 58.0,
+  "lead_max": 79,
+  "lead_mean": 61.1
 }
