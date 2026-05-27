@@ -1,0 +1,11 @@
+{
+  "N": 1000,
+  "empty_no_marker": 0,
+  "non_empty": 1000,
+  "correct": 1000,
+  "correct_pct": 100.0,
+  "lead_min": 30,
+  "lead_median": 30.0,
+  "lead_max": 30,
+  "lead_mean": 30.0
+}

@@ -1,0 +1,8 @@
+{
+  "no_retrieval_correctness": 0.0,
+  "vector_rag_correctness": 0.2,
+  "memory_oracle_correctness": 1.0,
+  "gap_vs_vector": 0.8,
+  "claim_validated": true,
+  "paper_implication": "For shorts/perps/futures: accretive retrieval is the missing primitive. Vector RAG is structurally incapable of preferring the correction; LLM-only is structurally incapable of knowing the rule exists. memory-oracle is the only path that produces a correct decision."
+}

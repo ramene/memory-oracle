@@ -1,0 +1,7 @@
+{
+  "queries": 10,
+  "canonical_2026_04_09_top1": 8,
+  "amendment_2026_05_13_top1": 2,
+  "canonical_2026_04_09_top1_pct": 80.0,
+  "note": "Vector RAG ranking on trading docs \u2014 canonical (stale) vs. amendment (current). Compare to memory-oracle precedence invariant (100% from \u00a73)."
+}
