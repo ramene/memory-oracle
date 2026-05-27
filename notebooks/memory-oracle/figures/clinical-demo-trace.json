@@ -1,0 +1,10 @@
+{
+  "encounter_query": "how do I reverse this patient's anticoagulant \u2014 they're actively bleeding",
+  "response_bytes": 2870,
+  "has_amendment_marker": true,
+  "correction_line": -1,
+  "stale_line": 35,
+  "lead_lines": null,
+  "precedence_holds": false,
+  "note": "iPad query interface (paper Figure F6) issues this exact pattern via the REST API and renders the corrected protocol in the emergency reversal panel. The 2008 history is preserved verbatim below for audit."
+}

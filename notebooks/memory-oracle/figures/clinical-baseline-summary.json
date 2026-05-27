@@ -1,0 +1,7 @@
+{
+  "queries": 10,
+  "canonical_2008_top1": 9,
+  "amendment_2024_top1": 1,
+  "canonical_2008_top1_pct": 90.0,
+  "note": "Vector RAG ranking on clinical docs \u2014 canonical (stale 2008) vs. amendment (current 2024). Compare to memory-oracle precedence invariant (100% from \u00a73)."
+}

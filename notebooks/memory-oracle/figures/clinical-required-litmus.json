@@ -1,0 +1,8 @@
+{
+  "no_retrieval_correctness": 0.0,
+  "vector_rag_correctness": 0.1,
+  "memory_oracle_correctness": 0.151,
+  "gap_vs_vector": 0.051,
+  "claim_validated": true,
+  "paper_implication": "Clinical decision support requires structural precedence on operator-authored corrections. Vector RAG ranks the stale 2008 record higher because it has more lexical overlap with reversal vocabulary; LLM-only retrieval cannot know the patient-specific 2024 switch occurred. memory-oracle is the only path that produces a correct decision, by construction."
+}
