@@ -103,4 +103,4 @@ The original failure was a coding-agent hallucination from a stale memory file. 
 
 The Springer LNCS paper is the scholarly form of the argument. The notebook is the reproducible evidence. The mobile apps are the hand-it-to-a-clinician demonstration. The PreToolUse hook is the substrate refusing to let agents bypass its own architecture. This document is the consolidated proof, in plain prose, that the effort accumulates.
 
-— *Ramene Anthony, Mérida, Mexico · 2026-05-22*
+— *Ramene Anthony · 2026-05-22*

@@ -150,4 +150,4 @@ Karpathy's autoresearch loops aimed at this and missed because they rewrote skil
 
 I'd love feedback. The repo is at [`github.com/ramene/memory-oracle`](https://github.com/ramene/memory-oracle). The clinical use case is open for co-authorship on the paper. The trading retrofit is an interesting orthogonal validation. If you're working on long-running AI agents in *any* domain where stale assertions are dangerous, I think this primitive is worth your weekend.
 
-— Ramene, Mérida, Mexico · 2026-05-17
+— Ramene · 2026-05-17
