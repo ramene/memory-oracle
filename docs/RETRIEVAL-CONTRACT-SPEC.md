@@ -45,7 +45,7 @@ The named entities the agent operates on per task — what the retrieval bundle 
 
 - `mae-openai-proxy` — Cloud Run service in `claey-338919`, OAuth via `auth.openai.com` (Codex CLI client_id `app_EMoamEEZ73f0CkXaXp7hrann`) → `chatgpt.com/backend-api/codex/responses`. ChatGPT Plus/Pro/Business subscription billing. **PRIMARY for L1 digest builder as of cutover that started 2026-05-12T22:23 UTC.** 173 occurrences in the originating session JSONL across May 12-16.
 - `mae-claude-proxy` — Cloud Run service in `claey-338919`, OAuth via `platform.claude.com` (Anthropic Claude Code client_id `9d1c250a-e61b-44d9-88ed-5944d1962f5e`) → `api.anthropic.com/v1/messages`. Max Plan subscription billing. **Now SECONDARY/FALLBACK in L1.** Still primary for any non-cutover paths.
-- `claude-custom` fork — `/Users/ramene/.remote/claude-src/claude-code-working` (commit `ae396db`, Apr 1 fork). Basis for both OAuth patterns.
+- `claude-custom` fork — a local `claude-code-working` checkout (commit `ae396db`, Apr 1 fork). Basis for both OAuth patterns.
 
 **Retrieval layers**:
 

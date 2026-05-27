@@ -192,7 +192,7 @@ The very failure this session demonstrated empirically maps cleanly:
 Minimum fix for this specific failure: implement **P0 (supersession sidecar)** with `feedback_brain_pipeline_max_plan_only.md.supersessions.jsonl` as the first record:
 
 ```jsonl
-{"superseded_by": "session-24cbed9c#L94616 — assistant 2026-05-12T22:23:49Z", "scope": "claim that brain path is Haiku-via-mae-claude-proxy", "corrected_assertion": "brain path is GPT-5.5-via-mae-openai-proxy primary; mae-claude-proxy secondary; Haiku 4.5 is tertiary fallback only", "live_evidence": "/Users/ramene/.bin/journal-digest-builder.mjs lines 45-83 + /Users/ramene/.remote/@plans/mae-monorepo-build/services/openai-proxy/server.js", "operator_confirmed": "2026-05-16T~18:00Z karve session 2d097fa8"}
+{"superseded_by": "session-24cbed9c#L94616 — assistant 2026-05-12T22:23:49Z", "scope": "claim that brain path is Haiku-via-mae-claude-proxy", "corrected_assertion": "brain path is GPT-5.5-via-mae-openai-proxy primary; mae-claude-proxy secondary; Haiku 4.5 is tertiary fallback only", "live_evidence": "~/.bin/journal-digest-builder.mjs lines 45-83 + services/openai-proxy/server.js", "operator_confirmed": "2026-05-16T~18:00Z karve session 2d097fa8"}
 ```
 
 What NOT to rebuild: vector embeddings over the corpus. The diagnosis doesn't justify a general-purpose vector store; it justifies supersession. Building pgvector now would be Mode 7 (Overbuilding).

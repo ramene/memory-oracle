@@ -39,7 +39,7 @@ When the retrieval engine fetches this file, it merges the amendment entries int
 ### Amendment 1 — 2026-05-12T22:23:49Z
 Corrected assertion: As of 2026-05-12, the brain pipeline PRIMARY is GPT-5.5 via
 mae-openai-proxy. mae-claude-proxy is now SECONDARY/FALLBACK.
-Live evidence: /Users/ramene/.bin/journal-digest-builder.mjs lines 45-83
+Live evidence: ~/.bin/journal-digest-builder.mjs lines 45-83
 Operator confirmed: 2026-05-16
 
 [original file content — preserved verbatim, read with the corrections above in mind]
