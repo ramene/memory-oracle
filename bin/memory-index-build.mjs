@@ -172,8 +172,12 @@ function getMerged(filePath) {
 }
 
 function loadSupersessionsFor(filePath) {
-  const sc = filePath + '.supersessions.jsonl';
-  if (!existsSync(sc)) return [];
+  // Accept both extensions: .amendments.jsonl (post-2026-05-27 EBR rename, paper-facing)
+  // and .supersessions.jsonl (operator's live corpus, backwards compat — never migrated).
+  // The amendment file wins if both exist.
+  const candidates = [filePath + '.amendments.jsonl', filePath + '.supersessions.jsonl'];
+  const sc = candidates.find(p => existsSync(p));
+  if (!sc) return [];
   const raw = readFileSync(sc, 'utf8');
   const out = [];
   for (const ln of raw.split('\n')) {
@@ -252,8 +256,11 @@ function watchMode() {
     if (!existsSync(memDir)) continue;
     const w = watch(memDir, { recursive: false }, (event, fname) => {
       if (!fname) return;
-      if (!fname.endsWith('.md') && !fname.endsWith('.supersessions.jsonl')) return;
-      const baseFile = fname.endsWith('.supersessions.jsonl') ? fname.replace('.supersessions.jsonl', '') : fname;
+      // Watch .md, .amendments.jsonl (new), and .supersessions.jsonl (backwards compat)
+      if (!fname.endsWith('.md') && !fname.endsWith('.supersessions.jsonl') && !fname.endsWith('.amendments.jsonl')) return;
+      let baseFile = fname;
+      if (fname.endsWith('.supersessions.jsonl')) baseFile = fname.replace('.supersessions.jsonl', '');
+      else if (fname.endsWith('.amendments.jsonl')) baseFile = fname.replace('.amendments.jsonl', '');
       const fullPath = join(memDir, baseFile);
       if (!existsSync(fullPath)) return;
       try {

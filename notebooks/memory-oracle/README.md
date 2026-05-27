@@ -1,6 +1,6 @@
 # memory-oracle notebooks
 
-Companion notebooks to the Springer LNCS paper *Memory That Argues With Itself: Accretive Supersession for AI Agent Retrieval* (Ramene, 2026). **Public — anonymous Colab clicks work.**
+Companion notebooks to the Springer LNCS paper *Memory That Argues With Itself: Evidence-Bound Retrieval for AI Agent Memory* (Ramene, 2026). **Public — anonymous Colab clicks work.**
 
 ## Three notebooks, two case studies, one substrate
 

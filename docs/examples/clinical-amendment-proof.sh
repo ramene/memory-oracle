@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# clinical-supersession-proof.sh
+# clinical-amendment-proof.sh
 #
-# Empirical proof that supersession sidecars correctly surface a 2024 cardiology
+# Empirical proof that amendment records correctly surface a 2024 cardiology
 # correction OVER a 2008 PCP note — the warfarin → apixaban scenario.
 #
 # Simulates the ER physician's LLM at 2026-05-17, asking: "what's this patient on?"
@@ -15,7 +15,7 @@ SYNTH_PROJECTS="$REPO_ROOT/docs/examples/clinical-records"
 ISOLATED_DB="/tmp/clinical-proof.db"
 
 echo "================================================================"
-echo "  Clinical supersession proof — Jane Doe (DOB 1959)"
+echo "  Clinical amendment proof — Jane Doe (DOB 1959)"
 echo "  ER scenario, 2026-05-17 14:33Z"
 echo "================================================================"
 echo ""
@@ -42,8 +42,8 @@ echo "  Patient bleeds out while wrong agent is administered. Vector RAG fails."
 echo ""
 echo ""
 echo "================================================================"
-echo "  STEP 2 — memory-oracle supersession-merged retrieval"
-echo "  Same ER LLM query, with supersession sidecar in play"
+echo "  STEP 2 — memory-oracle amendment-merged retrieval"
+echo "  Same ER LLM query, with amendment record in play"
 echo "================================================================"
 echo ""
 
@@ -61,7 +61,7 @@ echo ""
 
 OUTPUT=$(MEMORY_INDEX_DB="$ISOLATED_DB" node ~/.bin/memory-search.mjs "$QUERY" --budget=20000 --k=1 2>/dev/null)
 
-# The supersession block must appear BEFORE the stale reversal protocol in the merged output
+# The amendment block must appear BEFORE the stale reversal protocol in the merged output
 SUPERSEDE_POS=$(echo "$OUTPUT" | grep -n "andexanet alfa" | head -1 | cut -d: -f1)
 STALE_POS=$(echo "$OUTPUT" | grep -n "Fresh Frozen Plasma" | head -1 | cut -d: -f1)
 
@@ -78,7 +78,7 @@ if [ "$SUPERSEDE_POS" -lt "$STALE_POS" ]; then
   echo "and recommends andexanet alfa for the bleed. Patient survives."
   echo ""
   echo "Bonus: the original 2008 protocol is PRESERVED in the same output — so a future"
-  echo "clinician investigating WHY the supersession exists can read the historical"
+  echo "clinician investigating WHY the amendment exists can read the historical"
   echo "context. Provenance is intact."
 else
   echo "FAIL: stale assertion (line $STALE_POS) appears BEFORE correction (line $SUPERSEDE_POS)" >&2
@@ -92,4 +92,4 @@ echo "================================================================"
 rm -f "$ISOLATED_DB" "${ISOLATED_DB}-wal" "${ISOLATED_DB}-shm"
 echo "[cleanup] removed $ISOLATED_DB"
 echo ""
-echo "Proof complete. See docs/examples/clinical-supersession-proof.md for narrative."
+echo "Proof complete. See docs/examples/clinical-amendment-proof.md for narrative."

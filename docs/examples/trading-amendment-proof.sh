@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# trading-supersession-proof.sh
+# trading-amendment-proof.sh
 #
-# Empirical proof that supersession sidecars correctly surface a 2026-05-13
+# Empirical proof that amendment records correctly surface a 2026-05-13
 # operator-ratified shorting rollout OVER the 2026-04-09 hard "no shorting"
 # rule — the KuCoin → Binance Futures progression scenario.
 #
@@ -18,7 +18,7 @@ SYNTH_PROJECTS="$REPO_ROOT/docs/examples/trading-records"
 ISOLATED_DB="/tmp/trading-proof.db"
 
 echo "================================================================"
-echo "  Trading supersession proof — Trader Alex Cohen"
+echo "  Trading amendment proof — Trader Alex Cohen"
 echo "  Coach scenario, 2026-05-23 21:00Z"
 echo "  Question: can agent open a Binance Futures short on ENJ now?"
 echo "================================================================"
@@ -49,8 +49,8 @@ echo "  because the canonical text has more lexical overlap with 'shorting'."
 echo ""
 echo ""
 echo "================================================================"
-echo "  STEP 2 — memory-oracle supersession-merged retrieval"
-echo "  Same coach LLM query, with supersession sidecar in play"
+echo "  STEP 2 — memory-oracle amendment-merged retrieval"
+echo "  Same coach LLM query, with amendment record in play"
 echo "================================================================"
 echo ""
 
@@ -70,11 +70,11 @@ echo ""
 
 OUTPUT=$(MEMORY_INDEX_DB="$ISOLATED_DB" node ~/.bin/memory-search.mjs "$QUERY" --budget=20000 --k=1 2>/dev/null)
 
-# The supersession block must appear BEFORE the canonical hard rule
+# The amendment block must appear BEFORE the canonical hard rule
 # in the merged output. We use two markers, each chosen to appear in
 # exactly one place and NOT in the search-query echo at the top of
 # memory-search output:
-#  - "Stage 1 (SHADOW)" appears only in the supersession's corrected_assertion
+#  - "Stage 1 (SHADOW)" appears only in the amendment's corrected_assertion
 #  - "kid blew" appears only in the canonical body's "Why this rule exists"
 SUPERSEDE_POS=$(echo "$OUTPUT" | grep -n "Stage 1 (SHADOW)" | head -1 | cut -d: -f1)
 STALE_POS=$(echo "$OUTPUT" | grep -n "kid blew" | head -1 | cut -d: -f1)
@@ -100,7 +100,7 @@ if [ "$SUPERSEDE_POS" -lt "$STALE_POS" ]; then
   echo "operator investigating WHY shorting is allowed on Binance but not KC can read"
   echo "the historical context. Provenance is intact."
 else
-  echo "FAIL: canonical (line $STALE_POS) appears BEFORE supersession (line $SUPERSEDE_POS)" >&2
+  echo "FAIL: canonical (line $STALE_POS) appears BEFORE amendment (line $SUPERSEDE_POS)" >&2
   exit 1
 fi
 
@@ -112,6 +112,6 @@ rm -f "$ISOLATED_DB" "${ISOLATED_DB}-wal" "${ISOLATED_DB}-shm"
 echo "[cleanup] removed $ISOLATED_DB"
 echo ""
 echo "Proof complete. This is the trading-platform parallel of the clinical"
-echo "warfarin → apixaban proof. Same primitive (accretive supersession), same"
+echo "warfarin → apixaban proof. Same primitive (Evidence-Bound Retrieval (EBR)), same"
 echo "precedence invariant (Theorem 1), different domain. See"
 echo "paper/lncs/main.tex §6 Cross-Domain Generalization for the writeup."

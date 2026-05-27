@@ -55,7 +55,7 @@ The hard rule prevents this class of failure permanently.
 
 If we ever revisit shorting — and we eventually will — the path goes:
 **SHADOW → testnet paper → real-money canary**. Do not back-door the
-hard rule. Author a supersession sidecar on this file with the new
+hard rule. Author an amendment record on this file with the new
 authorization path.
 
 — Alex Cohen, Risk, 2026-04-09

@@ -4,19 +4,19 @@
 
 ## Variant A: short solo toot (one post, ~500 chars)
 
-🧠 Shipped `memory-oracle` — supersession-aware retrieval for AI agents.
+🧠 Shipped `memory-oracle` — Evidence-Bound Retrieval for AI agents.
 
 The problem: agents parrot stale memory files. Vector RAG can't tell "true today" from "true in 2008."
 
 The fix: corrections as additive JSONL sidecars beside canonical files. Merged at retrieval time. Original preserved.
 
-Clinical proof: 2008 warfarin note + 2024 apixaban supersession → ER LLM gets andexanet alfa, not FFP. Patient survives.
+Clinical proof: 2008 warfarin note + 2024 apixaban amendment → ER LLM gets andexanet alfa, not FFP. Patient survives.
 
 Repo: github.com/ramene/memory-oracle (MIT) #AI #ClinicalAI
 
 ## Variant B: short thread (3 toots)
 
-**1/3** Shipped memory-oracle — a supersession-aware retrieval substrate for AI agents. The problem it solves: agents confidently parrot stale memory files because vector RAG can't structurally surface corrections.
+**1/3** Shipped memory-oracle — a Evidence-Bound Retrieval substrate for AI agents. The problem it solves: agents confidently parrot stale memory files because vector RAG can't structurally surface corrections.
 
 The primitive is small: corrections are JSONL sidecars beside canonical files, merged at retrieval time so the agent encounters the correction *before* the stale assertion.
 
@@ -24,7 +24,7 @@ The primitive is small: corrections are JSONL sidecars beside canonical files, m
 
 Vector RAG ranks the 2008 warfarin note higher → orders FFP. Wrong reversal. Patient bleeds out.
 
-memory-oracle merges the 2024 supersession into retrieval. "andexanet alfa" appears 58 lines before "FFP." Patient survives.
+memory-oracle merges the 2024 amendment into retrieval. "andexanet alfa" appears 58 lines before "FFP." Patient survives.
 
 **3/3** Full repo: github.com/ramene/memory-oracle (MIT). Includes Node + Go CLIs, MCP server, REST API, Expo mobile apps (patient iPhone + clinician iPad with consent QR flow), and a 10-section Springer LNCS paper draft.
 
@@ -40,19 +40,19 @@ This is the Bad Write-Back failure mode. Every long-running AI agent eventually 
 
 Nate Jones wrote about this last week. He stopped short of proposing an architecture.
 
-**3/8** Here's the architecture I shipped: **accretive supersession**.
+**3/8** Here's the architecture I shipped: **Evidence-Bound Retrieval (EBR)**.
 
-When a fact changes, you append a JSONL sidecar beside the canonical memory file. Original is never edited. The retrieval engine merges supersession records into the output *before* the canonical body.
+When a fact changes, you append a JSONL sidecar beside the canonical memory file. Original is never edited. The retrieval engine merges amendment records into the output *before* the canonical body.
 
 Any sequential reader — LLM or human — encounters the correction first.
 
-**4/8** Clinical test case for the paper: synthetic patient Jane Doe, 67. Warfarin 2008. Switched to apixaban 2024 (the cardiologist wrote a supersession). ER bleeding 2026.
+**4/8** Clinical test case for the paper: synthetic patient Jane Doe, 67. Warfarin 2008. Switched to apixaban 2024 (the cardiologist wrote an amendment). ER bleeding 2026.
 
 The reversal agent for warfarin (FFP + vitamin K) DOES NOT REVERSE apixaban. The factor Xa inhibitor needs andexanet alfa.
 
 A vector RAG system retrieves the 2008 protocol and recommends FFP. Patient dies.
 
-**5/8** memory-oracle's retrieval merges the 2024 supersession block into the output. "andexanet alfa" appears at line 21. "Fresh Frozen Plasma" appears at line 79. The LLM reads the correction 58 lines before it ever sees the stale protocol.
+**5/8** memory-oracle's retrieval merges the 2024 amendment block into the output. "andexanet alfa" appears at line 21. "Fresh Frozen Plasma" appears at line 79. The LLM reads the correction 58 lines before it ever sees the stale protocol.
 
 This is a precedence invariant, provable from the merge algorithm. I have a theorem in the paper for it.
 
@@ -60,7 +60,7 @@ This is a precedence invariant, provable from the merge algorithm. I have a theo
 
 Read TRUST-MODEL.md in the repo for the full architecture.
 
-**7/8** The piece that surprised me: agents primed with supersession-aware retrieval *write new memory files during work*. The fs-watcher absorbs them in ~1 second. The next session retrieves them. The corpus self-extends.
+**7/8** The piece that surprised me: agents primed with Evidence-Bound Retrieval *write new memory files during work*. The fs-watcher absorbs them in ~1 second. The next session retrieves them. The corpus self-extends.
 
 This is the property Karpathy-style autoresearch loops aimed at and missed (they overwrote skills, lost provenance).
 

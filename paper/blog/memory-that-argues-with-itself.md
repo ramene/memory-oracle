@@ -1,6 +1,6 @@
 # Memory that argues with itself
 
-> *A supersession-aware retrieval substrate for AI coding agents, clinical decision support, and any domain where stale assertions are dangerous.*
+> *An Evidence-Bound Retrieval (EBR) substrate for AI coding agents, clinical decision support, and any domain where stale assertions are dangerous.*
 
 There's a failure mode I've watched LLM coding agents commit over and over again for the better part of a year. The agent reads a memory file you wrote three weeks ago. It's beautifully written, declarative, authoritative. It says *"the brain pipeline routes through `mae-claude-proxy` — never add `ANTHROPIC_API_KEY` fallback because it double-bills."*
 
@@ -14,7 +14,7 @@ In his recent piece [*"The New RAG War Is Not About Vectors"*](https://natebjone
 
 He stopped short of proposing a specific architecture. **This piece is the architecture.** The implementation is on GitHub: [`ramene/memory-oracle`](https://github.com/ramene/memory-oracle). It's MIT-licensed, ~3,500 lines across Node, Go, Expo, and LaTeX (the paper is in there too).
 
-## The primitive: accretive supersession
+## The primitive: Evidence-Bound Retrieval (EBR)
 
 When you write a memory file today, you write it as a canonical fact. Months pass. A clinical event, a refactor, a market regime shift — something changes. The fact is now wrong.
 
@@ -23,20 +23,20 @@ The standard responses are:
 2. **Append an addendum** (better, but retrieval doesn't know to surface it first)
 3. **Rewrite the embedding in a vector store** (the old embedding still matches matching queries)
 
-memory-oracle takes a different path: **append a supersession sidecar**. It's literally a JSONL file beside the canonical:
+memory-oracle takes a different path: **append a amendment record**. It's literally a JSONL file beside the canonical:
 
 ```
 ~/.claude/projects/mae/memory/
 ├── feedback_brain_pipeline.md                      # original — never edited
-└── feedback_brain_pipeline.md.supersessions.jsonl  # corrections, append-only
+└── feedback_brain_pipeline.md.amendments.jsonl  # corrections, append-only
 ```
 
-When the retrieval engine fetches this file, it merges the supersession entries into the output **before** the canonical body. Any sequential reader — human or LLM — encounters the correction *first*. The original is preserved verbatim afterward, so an auditor in 2030 can see exactly what was once believed and exactly when it was corrected.
+When the retrieval engine fetches this file, it merges the amendment entries into the output **before** the canonical body. Any sequential reader — human or LLM — encounters the correction *first*. The original is preserved verbatim afterward, so an auditor in 2030 can see exactly what was once believed and exactly when it was corrected.
 
 ```
-## ⚠ Supersession Notice (1 record)
+## ⚠ Amendment Notice (1 record)
 
-### Supersession 1 — 2026-05-12T22:23:49Z
+### Amendment 1 — 2026-05-12T22:23:49Z
 Corrected assertion: As of 2026-05-12, the brain pipeline PRIMARY is GPT-5.5 via
 mae-openai-proxy. mae-claude-proxy is now SECONDARY/FALLBACK.
 Live evidence: /Users/ramene/.bin/journal-digest-builder.mjs lines 45-83
@@ -59,14 +59,14 @@ In every commercial EHR I've seen — Epic, Cerner, athenahealth — the answer 
 
 This is not a hypothetical failure mode. It's the prototype failure of clinical AI memory in 2026, and the exact pattern that any retrieval system that does not *structurally* surface corrections is going to keep producing forever.
 
-With memory-oracle, the same query returns the supersession-merged output where "andexanet alfa" appears 58 lines before "Fresh Frozen Plasma." A sequential LLM reader sees the correction first. It's a precedence invariant — provable from the merge algorithm itself, not a property you have to retrain the model to obey.
+With memory-oracle, the same query returns the amendment-merged output where "andexanet alfa" appears 58 lines before "Fresh Frozen Plasma." A sequential LLM reader sees the correction first. It's a precedence invariant — provable from the merge algorithm itself, not a property you have to retrain the model to obey.
 
 The proof script reproduces in 30 seconds:
 
 ```bash
 git clone https://github.com/ramene/memory-oracle
 cd memory-oracle && ./install.sh
-./docs/examples/clinical-supersession-proof.sh
+./docs/examples/clinical-amendment-proof.sh
 
 # Expected output:
 #   PASS — corrected reversal (andexanet alfa, line 21) appears BEFORE
@@ -77,13 +77,13 @@ cd memory-oracle && ./install.sh
 
 Two things that surprised me as I was building this.
 
-**First**: the same architecture solves the **trading platform** problem. I run an automated trading system whose strategy rules update in response to observed P&L. In a single trading day's journal, I found *six* implicit supersessions — preset thresholds bumped, signal source weights adjusted, gate rules added — each one a correction of a prior assertion. The system was already doing accretive learning. It was just doing it implicitly, scattered across git commits and weight matrix updates. Making it explicit via supersession sidecars means the next trading session can `memory-search "kucoin-scanner trust"` and instantly get the supersession-merged truth, complete with the loss event that triggered the weight change. This is the second case study for the paper; the litmus reproduces in 30 seconds at `docs/examples/trading-supersession-proof.sh` (the trading parallel of the clinical proof).
+**First**: the same architecture solves the **trading platform** problem. I run an automated trading system whose strategy rules update in response to observed P&L. In a single trading day's journal, I found *six* implicit amendments — preset thresholds bumped, signal source weights adjusted, gate rules added — each one a correction of a prior assertion. The system was already doing accretive learning. It was just doing it implicitly, scattered across git commits and weight matrix updates. Making it explicit via amendment records means the next trading session can `memory-search "kucoin-scanner trust"` and instantly get the amendment-merged truth, complete with the loss event that triggered the weight change. This is the second case study for the paper; the litmus reproduces in 30 seconds at `docs/examples/trading-amendment-proof.sh` (the trading parallel of the clinical proof).
 
 **The harder claim** the trading retrofit unlocked: for **shorting / futures / perpetual** markets specifically, accretive retrieval is not nice-to-have — it is required for agent safety. Three reasons: (1) LLMs have no training data on the operator's funding-rate thresholds, per-regime leverage caps, or liquidation-band conditions — those rules don't exist publicly; (2) the rules evolve weekly with each operator decision; (3) the loss profile is asymmetric — spot positions can lose at most 100% of capital, but shorts and perps can lose much more and be liquidation-cascade unrecoverable. An agent acting on stale rules in these markets doesn't lose money slowly. It loses everything in one bad decision. Vector RAG ranks stale-but-lexically-similar rules first; LLMs alone don't know the rules exist; only structural precedence (memory-oracle's primitive) produces the correct decision. We measured all three retrieval paths against a synthetic shorting-authorization query: LLM-only correctness = 0, vector-RAG = 0, memory-oracle ≈ 1.0. Notebook: `mae-notebooks/memory-oracle/trading-case-study.ipynb`.
 
-**The substrate proved itself live during the writing of this post.** While drafting the forensic report on the trading session, I (the paper-writing agent) quoted a stale brain-cascade reference. The operator caught the divergence in real time. I wrote a supersession sidecar from the paper-writing session *against a file in a different project I don't own*. The fs-watcher absorbed it; the next memory-search from any session — including the trading project's own — returned the corrected cascade first, with the original preserved verbatim. Cross-session, cross-project, in about 4 seconds of wall-clock. This is the EHR scenario in microcosm: a sibling clinician corrects a primary's note; the agent reading the chart at 3 AM sees the correction first.
+**The substrate proved itself live during the writing of this post.** While drafting the forensic report on the trading session, I (the paper-writing agent) quoted a stale brain-cascade reference. The operator caught the divergence in real time. I wrote a amendment record from the paper-writing session *against a file in a different project I don't own*. The fs-watcher absorbed it; the next memory-search from any session — including the trading project's own — returned the corrected cascade first, with the original preserved verbatim. Cross-session, cross-project, in about 4 seconds of wall-clock. This is the EHR scenario in microcosm: a sibling clinician corrects a primary's note; the agent reading the chart at 3 AM sees the correction first.
 
-**Second**: agents primed with supersession-aware retrieval **write new memory files during their work**. The fs-watcher absorbs them within ~1 second. The next session retrieves them. The corpus is *self-extending*. I didn't design this — it emerged. In my operator usage over the past 96 hours, my own sessions wrote 8 new memory files, each indexed in under 2 seconds of authoring. Karpathy-style autoresearch loops never achieved this because their corrections destroyed the previous assertion. Accretive supersession is the missing primitive.
+**Second**: agents primed with Evidence-Bound Retrieval **write new memory files during their work**. The fs-watcher absorbs them within ~1 second. The next session retrieves them. The corpus is *self-extending*. I didn't design this — it emerged. In my operator usage over the past 96 hours, my own sessions wrote 8 new memory files, each indexed in under 2 seconds of authoring. Karpathy-style autoresearch loops never achieved this because their corrections destroyed the previous assertion. Evidence-Bound Retrieval is the missing primitive.
 
 ## Patient-owned encryption
 
@@ -99,7 +99,7 @@ Compared to standard EHRs:
 | Provider transfer = chart fax / HIE handoff | Provider transfer = you generate a QR for the new clinician |
 | Death/incapacity = institutional decision | Death/incapacity = Shamir's Secret Sharing recipients you nominated |
 
-The crypto isn't novel. age, X25519, HKDF, Shamir — they're all existing primitives. What's new is **the pairing**: accretive supersession (correctness) plus patient-owned keys (ownership) plus point-of-care consent gestures (UX) into one substrate.
+The crypto isn't novel. age, X25519, HKDF, Shamir — they're all existing primitives. What's new is **the pairing**: Evidence-Bound Retrieval (EBR) (correctness) plus patient-owned keys (ownership) plus point-of-care consent gestures (UX) into one substrate.
 
 ## What I built in 36 hours
 
@@ -109,8 +109,8 @@ Quick inventory of the repo at `github.com/ramene/memory-oracle`:
 - **MCP server** for AI agents that speak Anthropic's protocol
 - **REST API** (zero deps beyond Node stdlib, bearer-token auth)
 - **Patient mobile app** (Expo / React Native) — QR scan, PIN enrollment, session-key derivation, audit log
-- **Clinician iPad app** — separate Expo project, displays supersession-aware patient records with the ⚠ alert prominently above the emergency reversal panel, plus a free-form query interface that hits the REST API
-- **SessionStart hook** for Claude Code that auto-primes every new conversation with relevant supersession-aware context
+- **Clinician iPad app** — separate Expo project, displays amendment-aware patient records with the ⚠ alert prominently above the emergency reversal panel, plus a free-form query interface that hits the REST API
+- **SessionStart hook** for Claude Code that auto-primes every new conversation with relevant amendment-aware context
 - **PreToolUse hook** that intercepts shell commands and surfaces relevant memory before the command lands (this caught me about to run a known-broken `gh project create` and saved real-time correction by an operator)
 - **fs-watcher** that re-indexes any memory write in under 1 second (via macOS launchd / Linux systemd)
 - **Synthetic patient vault** with reproducible litmus test (the warfarin / apixaban scenario above)
@@ -128,23 +128,23 @@ cd memory-oracle
 memory-search "your topic"
 ```
 
-Then start a new Claude Code session in any directory. Notice the auto-priming happens before your first prompt. Write a `*.md` file in `~/.claude/projects/<your-project>/memory/`. Watch it get indexed in real time. Append a `.supersessions.jsonl` next to an existing file. Watch the next query merge the correction in.
+Then start a new Claude Code session in any directory. Notice the auto-priming happens before your first prompt. Write a `*.md` file in `~/.claude/projects/<your-project>/memory/`. Watch it get indexed in real time. Append a `.amendments.jsonl` next to an existing file. Watch the next query merge the correction in.
 
 That's the whole loop. It's small. It's a substrate, not a product.
 
-The clinical version with mobile apps and patient-owned encryption is in `packages/mobile/` and `packages/mobile-doctor/`. The trust model is documented in `docs/TRUST-MODEL.md`. The paper roadmap is in `docs/PAPER-ROADMAP.md`. The empirical proof of the precedence invariant is in `docs/examples/clinical-supersession-proof.sh`.
+The clinical version with mobile apps and patient-owned encryption is in `packages/mobile/` and `packages/mobile-doctor/`. The trust model is documented in `docs/TRUST-MODEL.md`. The paper roadmap is in `docs/PAPER-ROADMAP.md`. The empirical proof of the precedence invariant is in `docs/examples/clinical-amendment-proof.sh`.
 
 ## What this is, what it isn't
 
 This is **not** a new EHR. It's the memory layer underneath every EHR, trading system, legal compliance database, and incident-response runbook. It's the primitive that all of those have been doing implicitly — through git commits, through addenda, through "see also" links nobody follows under pressure — and that none of them have surfaced as a first-class part of retrieval.
 
-It's **not** a vector store, and it's **not** trying to replace one. If your problem is semantic retrieval over the open web, use a vector store. If your problem is *"these assertions evolve, corrections matter, and acting on stale truth is dangerous,"* you want accretive supersession.
+It's **not** a vector store, and it's **not** trying to replace one. If your problem is semantic retrieval over the open web, use a vector store. If your problem is *"these assertions evolve, corrections matter, and acting on stale truth is dangerous,"* you want Evidence-Bound Retrieval (EBR).
 
 It's **not** about Anthropic's models or Claude Code specifically. The CLIs work anywhere. The MCP server works with any MCP-aware agent. The REST API works with ChatGPT, Gemini, Llama, anything that can call HTTP. The SessionStart and PreToolUse hooks are Claude Code-specific, but the underlying retrieval is portable.
 
 ## The flywheel
 
-The piece I keep coming back to is the emergent flywheel. Agents primed with retrieval write new memory. The watcher absorbs it. The next session retrieves it. The corpus is *self-extending*, with provenance preserved at every step. In a clinical context this means: every supersession a cardiologist writes is read by the next emergency physician within seconds, structurally inseparable from the original record, with full audit. In a trading context it means: every weight adjustment from a loss event primes the strategy assessor before the next bet. In any context, it means: **the corpus gets smarter as a side-effect of being used**, and the smarter-getting is auditable.
+The piece I keep coming back to is the emergent flywheel. Agents primed with retrieval write new memory. The watcher absorbs it. The next session retrieves it. The corpus is *self-extending*, with provenance preserved at every step. In a clinical context this means: every amendment a cardiologist writes is read by the next emergency physician within seconds, structurally inseparable from the original record, with full audit. In a trading context it means: every weight adjustment from a loss event primes the strategy assessor before the next bet. In any context, it means: **the corpus gets smarter as a side-effect of being used**, and the smarter-getting is auditable.
 
 Karpathy's autoresearch loops aimed at this and missed because they rewrote skills (destructive). Vector RAG aimed at this and missed because retrieval similarity doesn't distinguish current from historical. memory-oracle threads the needle by making accretion the default and merging at read time.
 

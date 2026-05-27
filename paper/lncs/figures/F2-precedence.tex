@@ -1,5 +1,5 @@
 % F2 — Precedence Invariant (TikZ, paper-quality vector figure)
-% Sequence diagram showing supersession block precedes canonical body.
+% Sequence diagram showing amendment block precedes canonical body.
 % Concrete clinical anchors: "andexanet alfa" at line 21, "FFP" at line 79.
 %
 % Used in §5 Clinical Case Study as Figure 2, alongside Theorem 1.
@@ -26,10 +26,10 @@
   arrowlabel/.style={font=\sffamily\scriptsize, fill=white, inner sep=1pt}
 ]
 
-% --- Supersession block ---
+% --- Amendment block ---
 \node[superblock] (super) at (0,0) {%
-  \textbf{\textcolor{orange!70!black}{\#\# Supersession Notice (1 record)}}\\[2pt]
-  \textbf{Supersession 1 — 2024-03-15T14:22:00Z}\\
+  \textbf{\textcolor{orange!70!black}{\#\# Amendment Notice (1 record)}}\\[2pt]
+  \textbf{Amendment 1 — 2024-03-15T14:22:00Z}\\
   Scope: warfarin regimen + FFP reversal protocol\\
   Corrected: patient on apixaban 5\,mg BID.\\
   \textbf{Reversal: \textcolor{orange!80!black}{andexanet alfa}} (NOT FFP, NOT vitamin K).\\
@@ -37,7 +37,7 @@
   Operator confirmed: Dr.~Marcus Chen, Cardiology
 };
 
-% --- Line number markers for supersession block ---
+% --- Line number markers for amendment block ---
 \node[lineno] at ($(super.north west)+(-0.3,-0.08)$) {L1};
 \node[lineno] at ($(super.south west)+(-0.3,0.08)$) {L30};
 
@@ -80,10 +80,10 @@
 \node[font=\sffamily\scriptsize, gray!60!black, align=left, text width=14cm,
       below=0.4cm of canon.south, anchor=north]
   {\textbf{Theorem 1 (Precedence Invariant).}
-   Let $D$ be a canonical memory file with $k \geq 1$ supersession records
+   Let $D$ be a canonical memory file with $k \geq 1$ amendment records
    $\{s_1, \ldots, s_k\}$ written at times $t_1 < \cdots < t_k$. The retrieval
    merge operator $M(D)$ produces an output $O$ such that for every line $\ell_s$
-   containing a supersession assertion and every line $\ell_c$ containing a
+   containing an amendment assertion and every line $\ell_c$ containing a
    superseded canonical assertion, $\ell_s < \ell_c$ in the byte order of $O$.
    \textsl{Proof: by construction of $M$ (Algorithm~\ref{alg:merge}); empirically
    verified at $100\%$ over $N{=}1000$ randomized queries against the synthetic
@@ -92,7 +92,7 @@
 \end{tikzpicture}%
 }
 \caption{The precedence invariant, illustrated against the warfarin-to-apixaban
-clinical case. The retrieval engine emits supersession records (orange,
+clinical case. The retrieval engine emits amendment records (orange,
 lines 1–30) before the canonical body (blue, lines 31–100). A sequential
 reader — LLM or human — encounters the correction ``andexanet alfa''
 58 lines before the stale ``Fresh Frozen Plasma'' assertion. The

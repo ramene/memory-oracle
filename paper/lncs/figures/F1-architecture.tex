@@ -31,10 +31,10 @@
 
 % --- Tier nodes ---
 \node[curated] (curated) {\textbf{Tier 1 — Curated memory}\\\scriptsize \texttt{*.md} (canonical)};
-\node[super, below=of curated] (super) {\textbf{Supersession sidecars}\\\scriptsize \texttt{*.md.supersessions.jsonl}\\\scriptsize (append-only)};
+\node[super, below=of curated] (super) {\textbf{Amendment records}\\\scriptsize \texttt{*.md.amendments.jsonl}\\\scriptsize (append-only)};
 \node[digest, below=of super] (digest) {\textbf{Tier 2 — Journal digests}\\\scriptsize transcript-distilled summaries};
 
-% --- Dashed boundary grouping the curated + supersession ---
+% --- Dashed boundary grouping the curated + amendment ---
 \node[group, fit=(curated)(super), label={[legend,anchor=south west,xshift=0pt,yshift=-2pt]north west:Operator-authored corpus}] (curatedgroup) {};
 
 % --- Merge engine ---
@@ -68,7 +68,7 @@
 
 % --- Legend ---
 \node[legend, below=0.4cm of digest.south, anchor=north, align=left, text width=12cm] {%
-  \textbf{Precedence invariant:} for any retrieved file with $k \geq 1$ supersession records,
+  \textbf{Precedence invariant:} for any retrieved file with $k \geq 1$ amendment records,
   the merged output places all $k$ records before the canonical body —
   ensuring sequential readers (LLMs or humans) encounter the correction first.\\
   \textit{Theorem~\ref{thm:precedence}: empirically verified at $100\%$ over $N{=}1000$ randomized queries.}
@@ -77,8 +77,8 @@
 \end{tikzpicture}%
 }
 \caption{Architecture of memory-oracle. The retrieval engine indexes three corpus
-tiers (curated files, supersession sidecars, journal digests) and merges
-supersession records ahead of canonical bodies at read time. A filesystem
+tiers (curated files, amendment records, journal digests) and merges
+amendment records ahead of canonical bodies at read time. A filesystem
 watcher absorbs new writes within $\sim$1\,s, enabling a self-extending
 corpus. The LLM consumer (clinical decision support, coding agent, trading
 strategy assessor) receives a single merged document in which corrections

@@ -19,8 +19,11 @@ import { join, basename, dirname } from 'node:path';
 const ARGS = process.argv.slice(2);
 
 function loadSupersessions(memoryFilePath) {
-  const sidecar = memoryFilePath + '.supersessions.jsonl';
-  if (!existsSync(sidecar)) return [];
+  // Post-2026-05-27 EBR rename: prefer .amendments.jsonl; fall back to
+  // .supersessions.jsonl for operator's live corpus backwards compat.
+  const candidates = [memoryFilePath + '.amendments.jsonl', memoryFilePath + '.supersessions.jsonl'];
+  const sidecar = candidates.find(p => existsSync(p));
+  if (!sidecar) return [];
   const raw = readFileSync(sidecar, 'utf8');
   const out = [];
   for (const line of raw.split('\n')) {
@@ -122,11 +125,13 @@ async function main() {
     for (const dir of dirs) {
       for (const f of listMemoryFiles(dir)) {
         total += 1;
-        const sidecar = f + '.supersessions.jsonl';
-        if (existsSync(sidecar)) {
+        // Look for either extension (.amendments.jsonl preferred, .supersessions.jsonl legacy)
+        const sidecar = existsSync(f + '.amendments.jsonl') ? f + '.amendments.jsonl'
+                       : (existsSync(f + '.supersessions.jsonl') ? f + '.supersessions.jsonl' : null);
+        if (sidecar) {
           withSupersessions += 1;
           const sups = loadSupersessions(f);
-          console.log(`[supersession] ${f}`);
+          console.log(`[amendment] ${f}`);
           for (const s of sups) {
             console.log(`  → ${s.superseded_at || '?'}: ${(s.scope || '').slice(0, 100)}`);
           }

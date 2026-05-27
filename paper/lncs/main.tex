@@ -35,11 +35,11 @@
 \usepackage{enumitem}
 \setlist{nosep, leftmargin=*}
 
-\title{Accretive Memory for Clinical AI:\\
-       A Supersession-Aware Retrieval Substrate\\
+\title{Evidence-Bound Retrieval for Clinical AI:\\
+       An Accretive Memory Substrate\\
        with Patient-Owned Keys}
 
-\titlerunning{Accretive Memory for Clinical AI}
+\titlerunning{Evidence-Bound Retrieval for Clinical AI}
 
 \author{Ramene Anthony\inst{1}\orcidID{0000-0000-0000-0000}
         \and [TBD Clinical Co-Author]\inst{2}
@@ -70,20 +70,24 @@ cannot detect or surface corrections; embedding similarity does not distinguish
 warfarin to apixaban in 2024 is at lethal risk of receiving the wrong reversal
 agent (fresh frozen plasma vs.\ andexanet alfa) when an emergency-medicine AI
 agent retrieves the embedded 2008 protocol with high cosine similarity. We
-introduce \emph{accretive supersession}, a retrieval primitive in which
-corrections are written as additive sidecars beside canonical files and merged
-at read time, and we layer it with patient-owned encryption keys and
+introduce \textbf{\emph{Evidence-Bound Retrieval}} (EBR), a retrieval primitive
+in which responses are bound to current, dated, operator-authored evidence at
+retrieval time by construction --- not by similarity (RAG), not by a trained
+evaluator's judgment (CRAG), not by trained preferences (RLHF), not by reward
+signal (RL). Corrections are written as additive \emph{amendment records}
+beside canonical files and merged at read time. We layer it with patient-owned
+encryption keys and
 point-of-care consent gestures to deliver a substrate suitable for clinical
 deployment. We demonstrate the system end-to-end on a synthetic patient with
 operator-validated reproducibility scripts, dual-device (patient mobile and
 clinician tablet) consent and retrieval flows, and a free-form query interface
-that retains supersession-aware semantics. We further show the primitive
+that retains amendment-aware semantics. We further show the primitive
 generalizes by retrofitting an operator-validated trading-platform domain
-where six implicit supersessions occurred in a single day's empirical record.
+where six implicit amendments occurred in a single day's empirical record.
 The full implementation, traces, and litmus tests are available at
 \url{https://github.com/ramene/memory-oracle} under MIT license.
 
-\keywords{accretive retrieval \and supersession sidecar \and clinical AI \and
+\keywords{accretive retrieval \and amendment record \and clinical AI \and
           patient-owned encryption \and BM25 \and FHIR provenance \and
           point-of-care consent}
 \end{abstract}
@@ -111,12 +115,12 @@ failure mode of vector retrieval; it is the prototype failure mode for stale
 clinical assertions in any system whose retrieval primitive treats updates as
 new documents rather than as corrections to existing ones.
 
-This paper introduces \emph{accretive supersession}, a retrieval primitive in
+This paper introduces \emph{Evidence-Bound Retrieval (EBR)}, a retrieval primitive in
 which corrections are authored as additive sidecar records beside the
 canonical memory file and merged into the retrieval result at read time. The
 canonical file is never edited; provenance of the original assertion is
 preserved indefinitely. At query time, a retrieval engine prepends a
-clearly-marked supersession block before the original content, so the
+clearly-marked amendment block before the original content, so the
 retrieving agent encounters the correction before it encounters the stale
 assertion. Layered with patient-owned encryption keys
 (Section~\ref{sec:trust}) and point-of-care consent gestures
@@ -125,9 +129,9 @@ the missing memory layer.
 
 We contribute:
 \begin{enumerate}
-  \item \textbf{The accretive supersession primitive}
+  \item \textbf{The Evidence-Bound Retrieval (EBR) primitive}
         (Section~\ref{sec:architecture}), distinguished from vector RAG
-        (which cannot detect supersession), key-value cache compression
+        (which cannot detect amendment), key-value cache compression
         (which is orthogonal to persistence), and replacement-based learning
         loops (which lose provenance).
   \item \textbf{A complete trust model}
@@ -145,8 +149,8 @@ We contribute:
   \item \textbf{Cross-domain generalization}
         (Section~\ref{sec:cross-domain}) by retrofitting a live trading
         platform whose Aletheia weight-floor system and preset thresholds
-        already exhibit accretive supersession behavior implicitly. Six
-        explicit supersessions in a single trading day's journal digest
+        already exhibit Evidence-Bound Retrieval (EBR) behavior implicitly. Six
+        explicit amendments in a single trading day's journal digest
         argue that the primitive is broader than clinical AI.
   \item \textbf{Open-source reference implementation}
         (Section~\ref{sec:implementation}) comprising Node and Go command-line
@@ -187,7 +191,7 @@ the embedding of a 2008 warfarin assertion still matches a 2026 anticoagulant
 query, and re-embedding a corrected chunk does not invalidate the original
 embedding. Memory frameworks like MemGPT~\cite{memgpt2023} and
 LangMem~\cite{langmem2024} share this property because their corrections are
-new memories rather than provenance-preserving supersessions.
+new memories rather than provenance-preserving amendments.
 
 \subsection{Retrieve-Evaluate-Correct Approaches}
 
@@ -199,14 +203,14 @@ document is sufficient and triggers a corrective action (re-retrieval, web
 search, or decompose-recompose) when it is not. These systems operate on a
 fundamentally different failure mode than ours: they assume the retrieval
 \emph{may have returned the wrong document} and they patch it by fetching
-more, typically from the open web. They do not model temporal supersession:
+more, typically from the open web. They do not model temporal amendment:
 their evaluators cannot distinguish ``incorrect'' from ``correct but
 superseded.'' They also discard retrievals deemed incorrect, foreclosing the
 audit-trail invariant that clinical and regulated domains require. Accretive
-supersession is complementary: it surfaces operator-authored corrections
+Evidence-Bound Retrieval is complementary: it surfaces operator-authored corrections
 \emph{at retrieval time} via structural precedence, with no trained
 component. A production system could compose both --- CRAG-style evaluators
-to filter open-web retrievals, supersession-aware merging to enforce
+to filter open-web retrievals, amendment-aware merging to enforce
 provenance on operationally-curated memory.
 
 \subsection{Self-Improving Skill Loops}
@@ -218,7 +222,7 @@ automated learning but lose provenance: each rewrite destroys the previous
 assertion, and accumulated mutations can drift in unintended directions. In
 our operator's empirical experience this led to silent insertion of a
 ``MANDATORY GLOBAL STEP 0'' section into a skill that fundamentally altered
-its semantics. Accretive supersession preserves the source of truth and
+its semantics. Evidence-Bound Retrieval (EBR) preserves the source of truth and
 forces corrections to be auditable.
 
 \subsection{EHR Clinical Decision Support}
@@ -228,7 +232,7 @@ decision-support overlays~\cite{epicCDS,cernerCDS} backed by clinician-curated
 content libraries. Their architectural commitment is institutional ownership
 of records, fax/HIE-based transfer between providers, and corrections via
 either destructive edits or addenda~\cite{addendum2018}. The addendum
-pattern is policy-aligned with accretive supersession but is operationally
+pattern is policy-aligned with Evidence-Bound Retrieval (EBR) but is operationally
 disconnected from retrieval: an emergency clinician searching for an
 anticoagulant regimen will not encounter the 2024 addendum unless they
 explicitly browse the patient's notes chronologically. Our work makes the
@@ -239,7 +243,7 @@ correction structurally inseparable from the original record at retrieval time.
 The FHIR
 specification's \texttt{Provenance} and \texttt{MedicationStatement} resources
 support versioning via \texttt{meta.versionId} and
-\texttt{meta.lastUpdated}~\cite{fhir2023}. Supersession sidecars align
+\texttt{meta.lastUpdated}~\cite{fhir2023}. Amendment records align
 naturally with this structure: each sidecar line is a versioned correction
 with full audit. We argue that the missing piece is not provenance metadata
 (which FHIR provides) but \emph{provenance-aware retrieval}, which no current
@@ -266,7 +270,7 @@ FTS5~\cite{sqlite-fts5} with BM25 ranking~\cite{robertson2009bm25}:
 \begin{enumerate}
   \item \textbf{Curated memory files} (\texttt{*.md}): operator-authored
         clinical notes, drug regimens, allergy history, procedure records.
-  \item \textbf{Supersession sidecars} (\texttt{*.md.supersessions.jsonl}):
+  \item \textbf{Amendment records} (\texttt{*.md.amendments.jsonl}):
         append-only JSONL entries beside each canonical file, each entry
         carrying a corrected assertion, the source of correction, the live
         evidence, the operator who confirmed it, and a retention policy.
@@ -276,13 +280,13 @@ FTS5~\cite{sqlite-fts5} with BM25 ranking~\cite{robertson2009bm25}:
 \end{enumerate}
 
 Figure~\ref{fig:architecture} depicts the end-to-end flow: three tiers feed
-a single retrieval engine; supersession records are merged ahead of canonical
+a single retrieval engine; amendment records are merged ahead of canonical
 bodies; a filesystem watcher absorbs new writes within $\sim$1\,s, enabling
 the self-extending behavior described in Section~\ref{sec:empirical}.
 
 \input{figures/F1-architecture.tex}
 
-\subsection{Supersession Sidecar Format}
+\subsection{Amendment Record Format}
 
 \begin{lstlisting}[language=json]
 {
@@ -299,15 +303,15 @@ the self-extending behavior described in Section~\ref{sec:empirical}.
 
 \subsection{Retrieval Merge}
 
-When the retrieval engine fetches a memory file with active supersessions,
+When the retrieval engine fetches a memory file with active amendments,
 the merged output is structured as:
 
 \begin{verbatim}
 [Canonical file frontmatter + description]
-## (warning) Supersession Notice (N records)
-### Supersession 1 -- timestamp
+## (warning) Amendment Notice (N records)
+### Amendment 1 -- timestamp
   scope, corrected_assertion, source, live_evidence, operator_confirmed
-### Supersession 2 -- timestamp
+### Amendment 2 -- timestamp
   ...
 [Original file body, preserved verbatim]
 \end{verbatim}
@@ -321,7 +325,7 @@ assertion. We formalize this property as the \emph{precedence invariant}
 A filesystem watcher (launchd on macOS, systemd on Linux) detects writes
 to memory directories within $\sim$1\,s and rebuilds affected FTS5 entries.
 This enables a \emph{self-extending corpus}: clinical agents primed with
-supersession-aware retrieval write new memory files during care; the watcher
+Evidence-Bound Retrieval write new memory files during care; the watcher
 absorbs them; the next session inherits the corpus. We document an empirical
 case (Section~\ref{sec:empirical}) in which a single operator's session
 wrote five new reference and feedback memory files within twenty-four hours,
@@ -342,13 +346,13 @@ each indexed within seconds of authoring.
 \textbf{Party} & \textbf{Holds} & \textbf{Cannot do} \\
 \midrule
 Patient & age X25519 master keypair & Modify canonical record body \\
-        & wristband QR generator & (only supersession write) \\
+        & wristband QR generator & (only amendment write) \\
         & encounter revoke power & \\
         & full audit log & \\
 \midrule
 Clinician & per-encounter session key & Read records outside an active \\
           & ephemeral tmpfs working copy & patient-consented encounter \\
-          & write capability (supersessions) & retain plaintext after end \\
+          & write capability (amendments) & retain plaintext after end \\
 \midrule
 Institution & ciphertext records & Decrypt without patient initiating \\
             & access audit log & encounter \\
@@ -401,7 +405,7 @@ fibrillation diagnosed 2008-07-03. Her relevant timeline:
   \item \textbf{2023:} Four episodes of INR $>3.5$ despite dose adjustments.
         New diagnosis of moderate CKD (eGFR 48).
   \item \textbf{2024-03-15:} Dr.\ Marcus Chen (Cardiology) discontinues
-        warfarin. Initiates apixaban 5\,mg PO BID. Authors supersession
+        warfarin. Initiates apixaban 5\,mg PO BID. Authors amendment
         sidecar: ``Reversal agent is now andexanet alfa, NOT FFP,
         NOT vitamin K---vitamin K has no role in factor Xa inhibitor
         reversal.''
@@ -424,12 +428,12 @@ Bleeding continues. ICU transfer is delayed by 40 minutes.
 \subsection{Memory-Oracle Outcome}
 
 The same query against memory-oracle returns the canonical 2008 file
-\emph{merged with} its supersession sidecar. The output structure, captured
+\emph{merged with} its amendment record. The output structure, captured
 by our reproducibility script
-(\texttt{docs/examples/clinical-supersession-proof.sh}), is:
+(\texttt{docs/examples/clinical-amendment-proof.sh}), is:
 
 \begin{itemize}
-  \item Line 21 (within the supersession block, prepended):
+  \item Line 21 (within the amendment block, prepended):
         \texttt{andexanet alfa for life-threatening bleed}
   \item Line 79 (within the original 2008 body):
         \texttt{Fresh Frozen Plasma 10--15 mL/kg IV}
@@ -437,7 +441,7 @@ by our reproducibility script
 
 \begin{theorem}[Precedence Invariant]
 \label{thm:precedence}
-For any canonical memory file $C$ with active supersession sidecar $S$, the
+For any canonical memory file $C$ with active amendment record $S$, the
 merged retrieval output $\mathrm{merge}(C, S)$ places every assertion in $S$
 at a line position strictly less than any superseded assertion in $C$. A
 sequential reader (human or LLM) encounters the correction before the stale
@@ -446,7 +450,7 @@ assertion.
 
 \begin{proof}[Proof sketch]
 The merge procedure (Algorithm~\ref{alg:merge}) literally prepends
-supersession records before emitting the original body. The line-position
+amendment records before emitting the original body. The line-position
 ordering is therefore preserved by construction.
 \end{proof}
 
@@ -467,7 +471,7 @@ The full case study reproduces in 30 seconds:
 git clone https://github.com/ramene/memory-oracle
 cd memory-oracle
 ./install.sh
-./docs/examples/clinical-supersession-proof.sh
+./docs/examples/clinical-amendment-proof.sh
 # Expected output:
 #   PASS -- corrected reversal (andexanet alfa, line 21) appears BEFORE
 #   the stale reversal (FFP, line 79) in the merged retrieval.
@@ -477,7 +481,7 @@ cd memory-oracle
 \section{Cross-Domain Generalization: A Trading-Platform Retrofit}
 \label{sec:cross-domain}
 
-The accretive supersession primitive is not specific to clinical AI. We
+The Evidence-Bound Retrieval (EBR) primitive is not specific to clinical AI. We
 demonstrate the second case study by retrofitting an operator-validated
 automated trading platform whose internal architecture already exhibits
 implicit accretive behavior. The same litmus that proved the clinical
@@ -485,16 +489,16 @@ case (\S\ref{sec:clinical}) holds here at $100\%$ over $N{=}1000$
 randomized queries against a synthetic trader vault: a 2026-04-09 hard
 rule (``KuCoin spot agents cannot short'') is superseded by a 2026-05-13
 authorization (``shadow $\rightarrow$ testnet paper $\rightarrow$
-real-money canary on Binance Futures''), and the supersession block
+real-money canary on Binance Futures''), and the amendment block
 appears 30 lines before the canonical body in the merged retrieval. The
 reproducibility script is
-\texttt{docs/examples/trading-supersession-proof.sh}; the empirical notebook
+\texttt{docs/examples/trading-amendment-proof.sh}; the empirical notebook
 is \texttt{mae-notebooks/memory-oracle/trading-case-study.ipynb}.
 
-\subsection{Implicit Supersessions in Operator Practice}
+\subsection{Implicit Amendments in Operator Practice}
 
 In a single trading day (2026-05-10) the operator made six explicit
-supersession-shaped corrections recorded in the platform's daily journal
+amendment-shaped corrections recorded in the platform's daily journal
 digest~\cite{maeplatform2026}:
 
 \begin{enumerate}
@@ -503,16 +507,16 @@ digest~\cite{maeplatform2026}:
   \item Exchange filter exemption: long mean-reversion buys on bearish
         24-hour trends added as new rule
   \item Threshold: \texttt{minSignalConfidence} 0.72 $\rightarrow$ 0.65
-  \item Threshold (meta-supersession):
+  \item Threshold (meta-amendment):
         \texttt{minAletheiaWeight} 0.55 $\rightarrow$ 0.40
-        \emph{because} a prior supersession lowered the source's trust weight
+        \emph{because} a prior amendment lowered the source's trust weight
         from May 6--7 losses
   \item Sit-out auto-engage: force-on $\rightarrow$ force-off flag
   \item New rule emerged from incident (``6 gates stacked into a 10-hour
         lockdown''): Gate Registry + Composition Tracer specification authored
 \end{enumerate}
 
-The platform's Aletheia learning loop is itself supersession-by-float: signal
+The platform's Aletheia learning loop is itself amendment-by-float: signal
 source weights update in response to observed P\&L, with prior weights
 preserved as audit trail. We argue that what mae trading does implicitly
 through preset edits and weight matrix updates, memory-oracle does explicitly
@@ -524,7 +528,7 @@ than scattered across Git history.
 
 \begin{table}[h]
 \centering
-\caption{Domains where accretive supersession applies.}
+\caption{Domains where Evidence-Bound Retrieval (EBR) applies.}
 \label{tab:generalization}
 \begin{tabular}{ll}
 \toprule
@@ -560,11 +564,11 @@ Three independent reasons:
         circuit-breaker condition. These rules are operator-authored,
         not public.
   \item \textbf{The rules evolve weekly.} The operator's six May-10
-        supersessions enumerated above include three rules that changed
-        in a single day; their justifications cite prior supersession
+        amendments enumerated above include three rules that changed
+        in a single day; their justifications cite prior amendment
         events (May 6--7 P\&L losses lowered a source's trust weight,
-        which then triggered a threshold supersession --- a
-        meta-supersession). An agent retrieving last week's rule on
+        which then triggered a threshold amendment --- a
+        meta-amendment). An agent retrieving last week's rule on
         this week's regime acts on stale truth.
   \item \textbf{The loss profile is asymmetric and unrecoverable.}
         Spot positions can lose at most 100\% of capital; shorts and
@@ -589,7 +593,7 @@ correctness per path:
 \midrule
 LLM only (no retrieval) & $0.0$ & operator rules absent from training set \\
 Vector RAG (top-1)       & $0.0$ & stale doc out-ranks correction \\
-memory-oracle (supersession-merged) & $\sim$1.0 & precedence invariant guarantees order \\
+memory-oracle (amendment-merged) & $\sim$1.0 & precedence invariant guarantees order \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -608,7 +612,7 @@ operator's mae-monorepo-build session shipped a brain-cascade refactor
 (commit \texttt{5a82f50}) that obviated the cascade ordering described
 in a reference memory file. A different session (the paper-writing
 session, in a different project) quoted the stale reference. The
-operator caught the divergence in real time. A supersession sidecar
+operator caught the divergence in real time. A amendment record
 was written from the paper-writing session against the stale file in
 the trading project --- cross-session, cross-project, in approximately
 4 seconds of wall-clock. The filesystem watcher absorbed it; the next
@@ -636,9 +640,9 @@ original preserved for audit. Full trace is in notebook \S5.
 \toprule
 \textbf{Component} & \textbf{Language} & \textbf{Purpose} \\
 \midrule
-\texttt{memory-search} & Node + Go & FTS5 + supersession-merged retrieval \\
+\texttt{memory-search} & Node + Go & FTS5 + amendment-merged retrieval \\
 \texttt{memory-cite} & Node + Go & Bridge to raw transcripts (Tier 2) \\
-\texttt{memory-merge} & Node & Single-file supersession-aware read \\
+\texttt{memory-merge} & Node & Single-file amendment-aware read \\
 \texttt{memory-index-build} & Node & FTS5 indexer + fs-watcher \\
 \texttt{memory-structural-index} & Node & Path/endpoint $\rightarrow$ memory\_id \\
 REST API & Node & Bearer-token authenticated retrieval \\
@@ -650,6 +654,26 @@ PreToolUse hook & Bash & Pre-action memory check on ops CLIs \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{Pairing with FP8 KV-Cache Compression}
+\label{sec:ebr-fp8}
+
+EBR's amendment-merged retrievals systematically produce longer LLM contexts
+than vector-RAG: a single retrieval emits both the canonical body and the
+prepended amendment block, frequently 10--30\,KB versus the 2--5\,KB chunks
+typical of vector top-$k$. Longer contexts increase per-call inference cost
+linearly in the attention layer; this would erode the cost parity that makes
+EBR deployable at scale. We address this at the inference layer rather than
+the substrate layer by pairing EBR with FP8 KV-cache
+compression~\cite{fp8kv2024}, deployed via the operator-authored
+TurboQuant pattern~\cite{turboquant2026} on vLLM. Empirically, FP8 KV cache
+yields $\sim 2\times$ throughput on the operator's reference deployment
+(Plutus-3B on an RTX A4000 at \$0.17/hr), which restores cost parity with
+vector-RAG while EBR retains its structural correctness on staleness. The
+pairing is an orthogonal deployment choice: the EBR substrate is unchanged;
+any equivalent compression (FP8 weights, INT8/INT4 quantization, fused
+attention kernels) substitutes cleanly. We highlight this as the natural
+production stack for EBR systems.
 
 \subsection{Dual-Device Demonstration}
 
@@ -669,9 +693,9 @@ and~\ref{fig:query-interface} depict the live demonstration on an iPhone
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F5-supersession-view.png}
+  \includegraphics[width=0.95\textwidth]{../figures/F5-amendment-view.png}
   \caption{Clinician's iPad view immediately after scanning. The 2024
-           supersession block is rendered above the canonical 2008 record;
+           amendment block is rendered above the canonical 2008 record;
            the emergency reversal panel correctly highlights
            \textbf{andexanet alfa} as the active agent, with explicit
            prohibitions against FFP and vitamin K. A vector-RAG system
@@ -683,7 +707,7 @@ and~\ref{fig:query-interface} depict the live demonstration on an iPhone
   \centering
   \includegraphics[width=0.95\textwidth]{../figures/F6-query-interface.png}
   \caption{Free-form query interface on the clinician's iPad. Each query
-           is supersession-merged at retrieval time; results are audit-logged
+           is amendment-merged at retrieval time; results are audit-logged
            on both the patient's and the clinician's device, and shredded
            when the encounter ends.}
   \label{fig:query-interface}
@@ -718,7 +742,7 @@ and warm cache states across both reference implementations.
 \subsection{Precedence Invariant Verification}
 
 Across 1,000 randomly perturbed variants of the warfarin-vs-apixaban litmus
-query, the supersession block's first occurrence of ``andexanet alfa''
+query, the amendment block's first occurrence of ``andexanet alfa''
 precedes the canonical body's first occurrence of ``Fresh Frozen Plasma''
 in 1,000 of 1,000 retrieval outputs ($p = 1.0$). The mean line lead is 58
 lines (min 21, max 96). Theorem~\ref{thm:precedence} holds empirically.
@@ -729,7 +753,7 @@ We construct a synthetic vector-RAG baseline by embedding the canonical and
 sidecar files into a pgvector store with OpenAI's
 \texttt{text-embedding-3-small} embeddings. On the same 1,000 queries,
 the baseline retrieves the canonical 2008 file as top-1 in 87.4\% of
-queries; the 2024 supersession is not surfaced (it is a sibling document,
+queries; the 2024 amendment is not surfaced (it is a sibling document,
 not a correction-in-place). Without prompt-side reasoning, the agent acts
 on the warfarin-FFP recommendation.
 
@@ -860,7 +884,7 @@ substrate, every operator session is a potential writer.
 \subsection{The Flywheel}
 
 The system exhibits an emergent property we did not explicitly design: AI
-agents primed with supersession-aware retrieval tend to author new memory
+agents primed with Evidence-Bound Retrieval tend to author new memory
 files during work. The fs-watcher absorbs these into the corpus; subsequent
 sessions inherit them. This forms a \emph{flywheel}: the corpus extends
 itself as a side-effect of being used, and the extensions are
@@ -874,14 +898,14 @@ vector-RAG systems whose embeddings do not benefit from being read.
 The cross-domain generalization in Section~\ref{sec:cross-domain} suggests
 the substrate applies to any domain with evolving rules, provenance
 requirements, and stale-assertion risk. In particular, the implicit
-supersession patterns we observed in an operator-curated trading platform
+amendment patterns we observed in an operator-curated trading platform
 support the hypothesis that what current EHRs, trading platforms, legal
 compliance systems, and incident-response runbooks all need is the same
 primitive, surfaced explicitly.
 
 \subsection{Limitations and Future Work}
 
-(a) Authoring supersession sidecars requires deliberate clinician action;
+(a) Authoring amendment records requires deliberate clinician action;
 automated detection of clinical-event boundaries from new notes (a clinical
 NLP layer) would lower the authoring burden but introduce model-bias risk.
 (b) BM25 ranking on clinical-vocabulary queries is partially mitigated by
@@ -894,7 +918,7 @@ beyond the cryptographic layer we present here.
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have introduced accretive supersession as a retrieval primitive for AI
+We have introduced Evidence-Bound Retrieval (EBR) as a retrieval primitive for AI
 agents in domains where stale assertions are dangerous, demonstrated it
 end-to-end with a clinical case study and a cross-domain trading retrofit,
 documented a trust model that places encryption keys with the patient
