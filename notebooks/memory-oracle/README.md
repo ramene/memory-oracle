@@ -1,6 +1,11 @@
 # memory-oracle notebooks
 
-Companion notebooks to the Springer LNCS paper *Memory That Argues With Itself: Evidence-Bound Retrieval for AI Agent Memory* (Ramene, 2026). **Public — anonymous Colab clicks work.**
+Companion notebooks to the two memory-oracle papers:
+
+1. *Evidence-Bound Retrieval for Clinical AI: An Accretive Memory Substrate with Patient-Owned Keys* (Anthony, 2026) — the clinical-AI manuscript at [`paper/lncs/main.tex`](../../paper/lncs/main.tex).
+2. *Evidence-Bound Retrieval: A Substrate for CoALA's Episodic Memory Layer* (Anthony, 2026) — the position paper at [`paper/coala-extension/main.tex`](../../paper/coala-extension/main.tex).
+
+**Public — anonymous Colab clicks work.**
 
 ## Three notebooks, two case studies, one substrate
 
@@ -16,7 +21,7 @@ The setup cell of each notebook auto-detects which environment it's in:
 
 | Mode | Detection | What it does |
 |---|---|---|
-| **Local** | `~/.local/share/journal/.memory-index.db` exists AND `~/.bin/memory-search.mjs` exists | Uses the operator's live index + binaries. All sections runnable, including §5-§6 (which need operator corpus). |
+| **Local** | `~/.local/share/journal/.memory-index.db` exists AND `~/.bin/memory-search.mjs` exists | Uses the local install's live index + binaries. All sections runnable, including §5-§6 (which need a curated operator corpus). |
 | **Google Colab** | `google.colab` is importable | Installs Node 20 LTS via NodeSource, `git clone memory-oracle`, builds isolated index against the synthetic vault, mounts Google Drive for output persistence (`/content/drive/MyDrive/memory-oracle-figures/`). Operator-corpus sections skipped. |
 | **Deepnote / generic CI** | neither of the above | Same bootstrap as Colab without Drive. Operator-corpus sections skipped. |
 
@@ -44,4 +49,4 @@ jupyter nbconvert --to notebook --execute trading-case-study.ipynb --output trad
 
 ## Provenance
 
-Both notebooks moved here from `ramene/mae-notebooks` (private) on 2026-05-24 so the paper's reproducibility badges work for anonymous reviewers. The earlier moves: `empirical-evaluation.ipynb` was originally at `memory-oracle/paper/notebook/` (2026-05-15), moved to `mae-notebooks/memory-oracle/` (2026-05-17) for Deepnote sync, now back to `memory-oracle/notebooks/memory-oracle/` (this file). `trading-case-study.ipynb` was authored 2026-05-24 as the second case study (the trading parallel of the clinical warfarin → apixaban). Deepnote Teams subscription cancelled in favor of Colab Free, saving $50/mo.
+The notebooks were consolidated into this directory on 2026-05-24 so the paper's reproducibility badges work for anonymous reviewers without authentication. `empirical-evaluation.ipynb` was authored 2026-05-15; `clinical-case-study.ipynb` 2026-05-17; `trading-case-study.ipynb` 2026-05-24 as the second case study (the trading parallel of the clinical warfarin → apixaban scenario). All three are designed to run unchanged on Google Colab Free.
