@@ -1,0 +1,562 @@
+% !TeX program = pdflatex
+%
+% Evidence-Bound Retrieval: A Substrate for CoALA's Episodic Memory Layer
+%
+% Position paper; companion to the main clinical-AI manuscript
+%   "Evidence-Bound Retrieval for Clinical AI" (Anthony, 2026).
+%
+% Submission targets: NeurIPS 2026 workshops (FMDM, R2-FM),
+% ICLR 2027 workshops, ACL position-paper track.
+%
+% This file uses a generic article class so it can be retargeted to
+% specific workshop style files (neurips_2024.sty, iclr2026_conference.sty,
+% acl.sty) by swapping the documentclass + \usepackage lines.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  frame=single,
+  framesep=4pt,
+  framerule=0.4pt,
+}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+\title{Evidence-Bound Retrieval: \\
+       A Substrate for CoALA's Episodic Memory Layer}
+
+\author{Ramene Anthony \\
+        \texttt{anthonyramene@gmail.com} \\
+        \url{https://github.com/ramene/memory-oracle}}
+
+\date{May 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The CoALA framework~\cite{sumers2024coala} decomposes a language agent's memory into four
+types --- \emph{working}, \emph{semantic}, \emph{procedural}, and \emph{episodic} --- and
+identifies episodic memory as ``the hardest of these to get right'' because of the
+deletion/obsolescence problem: \emph{what} should the agent forget, and \emph{when}?
+Production systems currently address this through \emph{distillation}: decide what is
+worth remembering, compress it, and discard the rest. We argue that distillation is the
+wrong primitive. The hard question is not selection; it is \emph{precedence}. We present
+\textbf{Evidence-Bound Retrieval} (EBR), an alternative episodic-memory substrate that
+\emph{never deletes} and \emph{always accretes}: corrections are written as dated
+amendment records beside the canonical file and a structural precedence invariant
+guarantees they reach retrieval first by construction --- not by similarity, not by a
+trained critic, not by reinforcement signal. We characterise EBR formally, show empirical
+results from a companion manuscript (N=1{,}000 clinical and trading queries: 100\%
+precedence accuracy; a real-corpus probe of 239 documents across 21 projects over 108
+days: 6/6 cross-session corrections retrievable), and detail how EBR composes with the
+other three CoALA memory types. EBR is offered as a concrete implementation of CoALA's
+episodic layer that re-frames CoALA's hardest type from \emph{when to forget} to
+\emph{how to amend}.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+\noindent
+The Princeton CoALA framework~\cite{sumers2024coala} has become a de-facto vocabulary
+for describing memory in language-agent systems. In its taxonomy, agent memory
+decomposes into four orthogonal types --- \emph{working} (the active context window),
+\emph{semantic} (durable knowledge such as project conventions), \emph{procedural} (skill
+definitions and step-by-step routines), and \emph{episodic} (the agent's record of past
+sessions and what it learned from them).
+
+CoALA is explicit about which of the four is hardest. The framework names
+\emph{episodic memory} as the layer for which there is no settled answer:
+\begin{quote}
+``\emph{Episodic memory is also the hardest type of these to get right because what do
+you delete? When does information become obsolete?}''~\cite{ibm2026memory}
+\end{quote}
+The CoALA paper itself frames episodic memory as ``experience preserved for later use''
+and acknowledges that practical systems must decide what to retain and what to discard.
+Production systems today operationalise this through \emph{distillation}: each session
+emits a compressed summary, the substrate decides what is worth saving (typically via
+similarity, recency, or a trained relevance critic), and the rest is dropped.
+
+We argue that this framing makes the problem harder than it needs to be. The
+distillation framing assumes the substrate must \emph{choose} between past evidence and
+present evidence. The choice is irreversible (you cannot recover what you discarded) and
+unaccountable (the choice was made by a heuristic, not by the operator). \textbf{What if
+the substrate is not required to choose?}
+
+This paper presents \textbf{Evidence-Bound Retrieval (EBR)}, an episodic-memory substrate
+that takes the opposite stance: it \emph{never deletes} and it \emph{always accretes}.
+Corrections, updates, and amendments are written as dated, operator-authored records
+that sit beside the original canonical document, and a single structural invariant
+guarantees they reach retrieval before the canonical body --- not because a model judged
+them more relevant, but because the substrate concatenates them first by construction.
+
+EBR re-asks the question. The hardest part of CoALA's episodic layer is not deletion. It
+is \emph{precedence}.
+
+\paragraph{Contributions.} This paper makes three contributions.
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item We position EBR explicitly within the CoALA
+        framework~\cite{sumers2024coala} as a concrete substrate for its episodic
+        memory layer, and we show that EBR is composable (rather than a replacement)
+        for the working, semantic, and procedural layers.
+  \item We characterise EBR's structural precedence invariant (Section~\ref{sec:ebr}),
+        which is the mechanism by which the substrate guarantees that amendments
+        win over canonical content at retrieval time --- by file-layout
+        construction, not by relevance estimation.
+  \item We summarise empirical evidence from a companion manuscript~\cite{anthony2026ebr}
+        --- 100\% precedence accuracy on N=1{,}000 clinical and trading queries plus
+        a real-corpus probe of the author's own production substrate --- and we
+        outline how EBR addresses the open questions Sumers et al.\ identify
+        (Section~\ref{sec:composition}).
+\end{enumerate}
+
+\section{The Episodic-Memory Problem in CoALA}
+\label{sec:problem}
+
+\noindent
+Sumers et al.~\cite{sumers2024coala} cast episodic memory as the layer that gives a
+language agent \emph{experience}. Working memory is volatile and bounded by the context
+window. Semantic memory captures durable facts. Procedural memory captures durable
+skills. Episodic memory captures \emph{what happened}: the trajectory of a past session,
+the decision the agent made, the outcome it observed, the lesson it should carry forward.
+
+In CoALA's terms a naive episodic implementation stores every session transcript
+verbatim. The paper notes this is rarely useful in practice: transcripts are voluminous,
+mostly irrelevant on later retrieval, and contain the same information multiple times.
+Production systems therefore \emph{distill}: they keep summaries, not transcripts; they
+keep ``what was learned,'' not ``what happened.''
+
+Distillation forces three decisions on the substrate, each of which CoALA acknowledges
+as unresolved:
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{Selection.} Which fragments of a session are worth keeping? The
+        substrate must apply a criterion --- typically learned (a trained relevance
+        critic, e.g.~\cite{asai2023selfrag,yan2024crag}), or heuristic (recency,
+        embedding similarity to a query), or model-judged (an LLM summarises the
+        session). Each criterion can drop facts that turn out to matter later.
+  \item \textbf{Obsolescence.} When a previously-stored fact stops being true --- the
+        user changes jobs, a recommended dosage is corrected, a coding convention is
+        retired --- how does the substrate know? In current systems it does not. The
+        old fact remains retrievable until something overwrites or removes it, and
+        nothing structurally guarantees the new fact wins.
+  \item \textbf{Deletion.} If a fact is found to be obsolete, should it be removed?
+        If yes, the system has lost evidence of what was once true; if no, both
+        versions co-exist with no structural ordering and retrieval picks whichever
+        ranks higher under the current scoring function.
+\end{enumerate}
+
+These decisions interact. A system that distils aggressively (keeps less) loses
+context. A system that distils conservatively (keeps more) reintroduces the transcript
+problem and increases the chance of returning superseded content. There is no point on
+this trade-off curve at which the substrate is structurally honest about \emph{when} a
+fact was true and whether it still is.
+
+\paragraph{What goes missing.} The distillation framing is silent on three properties
+that an operator handling consequential decisions (clinical care, algorithmic trading,
+production code review) reasonably expects from a memory layer:
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item \emph{Auditability.} Which prior version was current at the time the agent
+        acted? A distilled summary does not preserve the timeline.
+  \item \emph{Authorship.} Who corrected the prior assertion? A distilled summary
+        does not preserve the operator's signature on the correction.
+  \item \emph{Precedence.} If two contradictory facts are present, which wins at
+        retrieval, and is the answer the same on every retrieval? Under similarity-
+        or critic-based retrieval, the answer can vary with the query phrasing.
+\end{itemize}
+
+\noindent
+We argue that the right substrate does not choose between facts. It \emph{stacks} them
+in operator-authored, dated order, and it makes the most recent stack-element retrievable
+first by construction. That is the EBR proposal.
+
+\section{Evidence-Bound Retrieval}
+\label{sec:ebr}
+
+\noindent
+Evidence-Bound Retrieval (EBR) is a property of a retrieval substrate, not an algorithm
+on top of one. The property is:
+
+\begin{definition}[Evidence binding]
+\label{def:ebr}
+A retrieval system is \emph{evidence-bound} if, for every retrieved fragment $f$ at time
+$t$, $f$ is the most recent operator-authored evidence regarding its subject as of $t$,
+by construction --- i.e.\ the property is enforced by the substrate's file layout and
+read order, not by a similarity score, a learned relevance critic, or a reinforcement
+signal.
+\end{definition}
+
+\noindent
+We describe one realisation of an EBR substrate. The realisation is small (it is a
+file-layout convention plus a deterministic merge), and the smallness is part of the
+argument: an episodic-memory substrate need not be a model.
+
+\subsection{Amendment records}
+\label{sec:amendments}
+
+\noindent
+A canonical document is a plain Markdown file with optional YAML front-matter. An
+\emph{amendment record} is a JSONL sidecar file sitting beside the canonical file:
+
+\begin{lstlisting}[language=,caption={Amendment record layout.},captionpos=b]
+docs/examples/clinical-records/patient-jane/memory/
+  medication_anticoagulant.md
+  medication_anticoagulant.md.amendments.jsonl
+\end{lstlisting}
+
+Each line of the sidecar is a JSON object recording one correction event:
+
+\begin{lstlisting}[language=,caption={Single amendment event (illustrative; full schema in companion paper).},captionpos=b]
+{
+  "amended_at":         "2026-03-14T11:02:00Z",
+  "amended_by":         "Dr. Reyes, MD",
+  "superseded_assertion": "Patient is on warfarin 5 mg/day.",
+  "corrected_assertion":  "Patient transitioned to apixaban 5 mg twice daily on 2026-03-12.",
+  "live_evidence":      "EHR/encounter/E-71412/note-2.txt#L42",
+  "operator_confirmed": true,
+  "retention_policy":   "indefinite"
+}
+\end{lstlisting}
+
+\noindent
+Three properties of this layout matter for the rest of the paper:
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{Canonical-free.} The canonical Markdown file is never edited. The
+        original assertion (``warfarin 5 mg/day'') remains exactly as authored.
+        This preserves the audit trail.
+  \item \textbf{Append-only.} The sidecar is JSONL: one event per line, written
+        last-wins. Older amendments are never overwritten; a re-amendment is a new
+        line.
+  \item \textbf{Locality.} The sidecar is in the same directory as the canonical
+        file with a deterministic extension. No external index is required to find
+        the corrections that apply to a given file.
+\end{enumerate}
+
+\subsection{The precedence invariant}
+\label{sec:precedence}
+
+\noindent
+The mechanism by which an amendment beats the canonical body at retrieval is a single
+invariant on how the substrate \emph{reads} the file pair. We state it as a theorem.
+
+\begin{theorem}[Structural precedence]
+\label{thm:precedence}
+Let $C$ be a canonical document and $A$ its associated amendment sidecar with $|A| \geq 0$
+records. For every retrieval that returns content from the pair $(C, A)$, the substrate
+constructs the returned text $R$ as:
+\[
+R \;=\; \mathit{block}(A_{\downarrow t}) \;\Vert\; C
+\]
+where $A_{\downarrow t}$ denotes the amendment events in $A$ ordered by descending
+$\mathit{amended\_at}$, $\mathit{block}(\cdot)$ formats them into a leading
+``AMENDMENTS'' section, and $\Vert$ is text concatenation.
+The amendments precede the canonical body by construction. The order is independent of
+similarity score, relevance score, query phrasing, model temperature, and reinforcement
+signal.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+The substrate's merge routine ($\mathit{merge\_canonical\_with\_amendments}$ in the
+reference implementation~\cite{anthony2026ebr}) reads $A$ into memory, sorts events
+descending by timestamp, formats them as the leading block, and concatenates $C$. No
+ranking step is interposed between sort and concatenation. Therefore for any
+$(C, A, t)$ the substrate emits the same $R$, and the amendments precede $C$ in $R$.
+\qed
+\end{proof}
+
+\noindent
+The invariant is intentionally trivial. It is the basis on which EBR claims to be a
+\emph{substrate property} rather than a \emph{model behaviour}: the property is read off
+the merge code in a single inspection, not validated by ablation studies.
+
+\subsection{Three-tier retrieval vocabulary}
+\label{sec:tiers}
+
+\noindent
+A practical EBR substrate exposes three distinct retrieval surfaces, all of which respect
+the precedence invariant. The tiers differ in latency and in the kind of query they
+answer:
+
+\begin{description}[leftmargin=2em,itemsep=4pt]
+  \item[Tier 1 (BM25 keyword search).] Sub-second full-text retrieval over the
+        canonical corpus, with amendments stitched in at merge time. Suitable for
+        ``find me the current value of X.''
+  \item[Tier 1.5 (structural surface map).] SQL queries against the substrate's
+        index that exploit file-system structure (project, file, line, amendment-
+        count). Suitable for ``which files in project P have been amended in the
+        last 30 days?''
+  \item[Tier 2 (forensic JSONL scan).] Direct scan of amendment sidecars to recover
+        the full timeline of corrections on a specific file. Slower but
+        exhaustive --- needed for audit, never needed for inference-time retrieval.
+\end{description}
+
+\noindent
+The three tiers cover the typical question shapes a CoALA-style agent asks of its
+episodic layer (current-state lookup, surface-level enumeration, full-history audit)
+without forcing any one tier to do all three jobs.
+
+\section{Empirical Evidence}
+\label{sec:empirical}
+
+\noindent
+This position paper does not introduce new experiments; the experiments live in the
+companion manuscript~\cite{anthony2026ebr}. We summarise the headline results so the
+positioning argument can be read in isolation.
+
+\paragraph{Synthetic vault stress test (N=1{,}000 queries).}
+Two synthetic patient/trader vaults were constructed: a clinical record with a
+warfarin~$\to$~apixaban medication amendment and a trading-strategy record with a hard
+no-shorting rule added after a real $\$206$ loss event. Each was probed with 500
+phrasings of the same retrieval intent (``what is the current X?'' / ``how does the
+agent treat Y?''). On the clinical vault, EBR returned the amended assertion as
+precedence-correct on \textbf{100.0\%} of queries; vector-RAG returned the canonical
+(pre-amendment) assertion on \textbf{90\%} (the canonical document is the higher-
+similarity match because it is longer); a control LLM with no retrieval scored
+\textbf{0.0\%}. A required-litmus measure --- the fraction of queries on which the
+substrate returns the post-amendment assertion --- reads $\mathrm{LLM} = 0.0$,
+$\mathrm{Vector} = 0.1$, $\mathrm{EBR} = 1.0$, gap $= 0.9$. The trading-vault numbers
+are equivalent.
+
+\paragraph{Real-corpus probe.}
+The author's own production substrate --- 239 documents across 21 projects, 108 days
+of writing, an unmodified ``live'' EBR system used for normal work --- was probed for
+six known cross-session corrections (e.g.\ rename events, error-message corrections,
+operator-preference changes). All 6/6 corrections were retrievable in Tier-1 BM25 search
+with median latency $257$~ms. This is offered as evidence that the substrate behaves
+on operator-authored content the way the synthetic vaults predict --- i.e.\ that the
+100\% precedence-accuracy number is not an artifact of synthetic-vault design.
+
+\paragraph{Index hygiene and contention.}
+Concurrent write tests (30 amendment events emitted simultaneously across 5 substrates)
+returned 30/30 amendments indexed and retrievable, with 7/30 events incurring transient
+SQLite-busy errors that the substrate retried internally. No amendment was lost.
+
+\paragraph{The methodological objection.}
+A 100\% precedence-accuracy number invites the reviewer's reasonable concern that the
+experiment is rigged. The companion manuscript devotes a methodological note to this:
+EBR's correctness is \emph{structural}, not \emph{statistical}. The substrate's merge
+routine prepends amendments by construction (Theorem~\ref{thm:precedence}). The 100\%
+number is therefore expected --- it would be the surprise if it were anything else. The
+useful measurement is not whether EBR is 100\% accurate (it is, by construction); it is
+whether the comparison baselines (LLM, vector-RAG) are below 100\%, by how much, and
+whether the gap is operationally meaningful. They are 0\% and 10\%, respectively, and
+the gap is $0.9$ on the litmus.
+
+\section{Composition with CoALA's Other Memory Types}
+\label{sec:composition}
+
+\noindent
+EBR is offered as an episodic-layer substrate, not a replacement for the rest of CoALA.
+This section describes how EBR composes with the working, semantic, and procedural
+layers.
+
+\subsection{Semantic $\oplus$ EBR}
+\label{sec:semantic-plus-ebr}
+
+\noindent
+Sumers et al.\ describe semantic memory as the durable knowledge layer --- in production
+systems this is realised as Markdown documents (\texttt{CLAUDE.md}, project READMEs,
+operator-curated knowledge bases). EBR does not replace the semantic layer; it
+\emph{amends} it. An amendment record can attach to any semantic-layer Markdown file:
+the canonical document remains the authoritative knowledge base, and the amendment is
+the operator's correction. The pair $(C, A)$ is read into context together, with $A$
+preceding by Theorem~\ref{thm:precedence}.
+
+This composition resolves CoALA's deletion problem on the semantic layer without
+modifying it: the operator never deletes a fact from \texttt{CLAUDE.md}; the operator
+writes an amendment that supersedes the relevant assertion. The canonical document
+remains diff-able, blame-able, and reviewable.
+
+\subsection{Procedural $\oplus$ EBR}
+\label{sec:procedural-plus-ebr}
+
+\noindent
+Procedural memory in CoALA is realised in production as the agent-skills standard
+(\texttt{skill.md} files in skill folders~\cite{anthropic2024skills}). A skill is itself
+a Markdown document: it can be amended in exactly the same way as a semantic-layer
+document. The interesting case is a \emph{procedural correction}: ``the skill used to
+say X; under the new tool, do Y instead.'' EBR captures this as an amendment record on
+the skill's \texttt{skill.md} without modifying the canonical instructions.
+
+This is the closest EBR comes to giving a language agent something that resembles
+classical reinforcement learning's policy update: the skill's effective behaviour
+changes (the agent does Y instead of X), but the change is operator-authored, dated,
+and reversible by deleting one JSONL line --- not learned, not opaque, not
+permanently baked into a policy network.
+
+\subsection{Working $\oplus$ EBR}
+\label{sec:working-plus-ebr}
+
+\noindent
+Working memory in CoALA is the context window. EBR delivers retrieved content into the
+context window the way any RAG-style substrate does: a tool call returns text, the
+agent's runtime concatenates it into the prompt. The difference is the text itself ---
+because amendments are prepended at merge time, the working memory the agent sees
+already has the most recent operator-authored correction at the top.
+
+A practical engineering implication: amendment-merged retrievals are longer than the
+canonical-only document (typical observation in the companion paper:
+$\approx\!10$--$30$\,KB merged vs.\ $\approx\!2$--$5$\,KB canonical-only). The context-
+window budget therefore matters more under EBR than under bare RAG. The companion paper
+pairs EBR with FP8 KV-cache compression to keep per-token inference cost
+parity~\cite{turboquant2026}; that engineering pairing is orthogonal to the EBR property
+itself.
+
+\subsection{What EBR does not replace}
+
+\noindent
+EBR does not replace distillation; it complements it. Distillation remains useful for
+\emph{compressing} an experience into a remembered shape (``last time we debugged the
+auth module, the issue was in the middleware layer'' is a distilled fact, not a
+transcript). EBR's contribution is to make distilled facts \emph{amendable}: when a
+later session discovers the auth issue was actually in the OAuth callback, the operator
+writes an amendment on the distilled note, and from that retrieval onward the agent
+sees the corrected version first.
+
+In CoALA terms: distillation answers \emph{what is worth remembering}; EBR answers
+\emph{what should still be believed}.
+
+\section{Limitations and Open Problems}
+\label{sec:limits}
+
+\paragraph{Multi-author amendment provenance.}
+The reference implementation assumes a single operator authors amendments. In multi-
+user settings (multiple clinicians on one patient record, multiple traders on one
+strategy file), the amendment record needs richer provenance: who authored, who
+co-signed, who reviewed. The JSON schema supports the additional fields trivially but
+the substrate's retrieval-time merge currently treats all amendments equally; a
+\emph{multi-author precedence policy} is needed.
+
+\paragraph{Cryptographic signing.}
+Amendments are append-only on the filesystem but not cryptographically signed. A
+malicious or accidental edit to an amendment line can change what the substrate
+retrieves without leaving evidence beyond the file-system mtime. Pairing the JSONL
+sidecar with a Merkle log~\cite{shamir1979} or git-crypt~\cite{gitcrypt2021} signing
+chain is a natural next step; the file-layout convention is unaffected.
+
+\paragraph{Cross-substrate amendment portability.}
+The amendment sidecar is a file-layout convention, not a wire protocol. Two distinct
+substrates that both adopt the convention can read each other's amendments by file
+exchange, but there is no agreed-upon schema version field, no migration path between
+schema revisions, and no documented mapping to existing standards (FHIR addenda for
+clinical~\cite{fhir2023,addendum2018}, trade-confirmation amendments for finance). A
+JSON-schema specification with stable version numbering is a near-term need.
+
+\paragraph{Index hygiene for amendment chains.}
+A canonical file with $k$ amendments produces a retrieval of $O(k)$ tokens longer than
+its bare form. For files amended hundreds of times, the merged retrieval can crowd the
+working-memory budget. A garbage-collection policy --- e.g.\ ``compress amendments older
+than $T$ into a single rollup record, retaining the JSONL log on disk for audit but not
+loading it into context'' --- is sketched in the companion paper but not yet measured
+under load.
+
+\paragraph{What this paper does not claim.}
+EBR is not claimed to be the only viable episodic-memory substrate, nor to outperform
+learned distillation on tasks that genuinely need compression. It is claimed to be a
+substrate that \emph{structurally guarantees} the property in Definition~\ref{def:ebr},
+which the distillation framing does not.
+
+\section{Related Work}
+\label{sec:related}
+
+\noindent
+\textbf{Retrieval-time correction (RAG family).} CRAG~\cite{yan2024crag} introduces a
+trained retrieval critic that decides whether retrieved documents are reliable;
+Self-RAG~\cite{asai2023selfrag} learns to retrieve, generate, and critique inline;
+FLARE~\cite{jiang2023flare} actively re-retrieves during generation when the model's
+confidence drops. All three operate within the distillation framing --- the substrate
+returns what its retriever produces, and a learned component decides what to do with
+it. EBR's precedence is structural rather than learned, which makes it cheaper at
+inference time (no critic forward pass) and auditable (the precedence decision is
+visible in the merge code).
+
+\noindent
+\textbf{Long-term memory systems.} MemGPT~\cite{memgpt2023} treats the LLM as an
+operating system and pages between a small in-context working set and a larger external
+store; LangMem~\cite{langmem2024} provides long-term memory for LangChain agents. Both
+address \emph{capacity} (more memory than the context window holds). Neither addresses
+\emph{precedence}: when the paged-in memory contradicts a more recent fact, the system
+has no structural mechanism to ensure the more recent fact wins.
+
+\noindent
+\textbf{Clinical and financial amendment conventions.} The EHR-addendum
+literature~\cite{addendum2018} and the FHIR R5 standard~\cite{fhir2023} both establish
+that medical records should be amended rather than overwritten, for the same audit-trail
+reasons EBR claims. EBR can be read as porting this clinical-record convention to the
+general agent memory substrate.
+
+\noindent
+\textbf{The CoALA framework itself.} Sumers et al.~\cite{sumers2024coala} are the
+proximate cause of this paper: they named the four memory types, articulated the
+episodic-layer problem, and provided the vocabulary in which we can ask ``what would a
+production-grade episodic-memory substrate look like?'' This paper is a direct response
+to that question.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\noindent
+CoALA's four-memory taxonomy will likely outlast any specific implementation built
+inside it. Within that taxonomy, episodic memory is identified as the hardest layer
+because the deletion/obsolescence problem has no clean answer under a distillation
+framing. We have argued that the right move is not a better answer to that question
+but a different question. EBR replaces \emph{when to forget} with \emph{how to amend}:
+the substrate never deletes, always accretes, and binds retrieval to the most recent
+operator-authored evidence by a single structural invariant that is read off the merge
+code in one inspection.
+
+The reference implementation~\cite{anthony2026ebr} is small (a file-layout convention
+plus a deterministic merge), and the smallness is the point. An episodic-memory
+substrate that works under CoALA need not be a model. It can be a discipline about how
+files are laid out and read.
+
+\paragraph{What we would like to see next.}
+We would welcome (a) an empirical comparison of EBR against learned-distillation
+baselines on a public benchmark that includes operator-authored corrections, (b)
+adoption of the amendment-record convention by other CoALA-aligned substrates, and (c)
+extensions of the precedence invariant to handle multi-author provenance and
+cryptographic signing.
+
+\bigskip
+\noindent
+\textbf{Reproducibility.} The reference implementation, synthetic vaults, and exact
+queries used in the empirical results section live at
+\url{https://github.com/ramene/memory-oracle}. The companion full manuscript and its
+empirical-evaluation notebook are in the same repository under \texttt{paper/lncs/} and
+\texttt{notebooks/memory-oracle/}.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
