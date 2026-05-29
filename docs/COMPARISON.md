@@ -51,7 +51,7 @@ Karpathy's broader argument (in his recent talks) is that agents should *learn f
 
 - **Not a replacement for `/scaffold` or skill-bootstrapping flows.** Those handle "start a new thing." memory-oracle handles "bring prior context to bear on whatever you're doing."
 - **Not a replacement for project documentation or ADRs.** Memory files capture operational truth that's too fast-moving for an ADR; ADRs capture deliberate decisions. Both belong in the same repo, often.
-- **Not a universal long-term memory.** It's scoped to operator-curated content. The raw transcript firehose (1+ GB JSONL) is intentionally NOT indexed — see `docs/RETRIEVAL-STACK-ADR.md` for why bulk-indexing the firehose hurts more than helps.
+- **Not a universal long-term memory.** It's scoped to operator-curated content. The raw transcript firehose (1+ GB JSONL) is intentionally NOT indexed — see `docs/genesis/RETRIEVAL-STACK-ADR.md` for why bulk-indexing the firehose hurts more than helps.
 
 ## Where Karpathy autoresearch + memory-oracle could compose
 
