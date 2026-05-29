@@ -1,12 +1,21 @@
-# mae — video ingestion (Qwen2.5-VL on Deepnote)
+# Video ingestion via Qwen2.5-VL on Deepnote
 
-Triggered via Deepnote Jobs API. POST → poll → fetch `/work/output.json`.
+A batch video-ingestion pattern: trigger via Deepnote Jobs API, POST → poll →
+fetch `/work/output.json`. Pairs nicely with any downstream consumer that needs
+structured signal extraction from a YouTube URL (per-frame inference + transcript
+aggregation).
 
-Per Task #174 (operator session `24cbed9c`, 2026-05-03 spec). Replaces the RunPod L40S video-extraction path with a managed Deepnote notebook trigger.
+This notebook is published as a generic reference for the Deepnote-Jobs-API +
+Qwen2.5-VL pattern. It is **not** a memory-oracle / EBR component. Operators
+running EBR workloads do not need this notebook; it is included only because the
+pattern is reusable and was authored in the same window as the substrate work.
 
 ## Pipeline
 
-`yt-dlp` → frame extraction (ffmpeg, every `FRAME_INTERVAL_SEC`) → **Qwen2.5-VL** inference per frame with a trading-intelligence prompt → aggregated signal record → `/work/output.json` → `mae-gpu-manager.mjs` consumes.
+`yt-dlp` → frame extraction (ffmpeg, every `FRAME_INTERVAL_SEC`) → **Qwen2.5-VL**
+per-frame inference with a configurable prompt profile → aggregated signal record
+→ `/work/output.json` → any downstream consumer (e.g., a GPU-manager service that
+polls the Deepnote job and reads the file).
 
 ## Parameters (Deepnote Jobs API payload)
 
@@ -17,13 +26,13 @@ Per Task #174 (operator session `24cbed9c`, 2026-05-03 spec). Replaces the RunPo
 | `FRAME_INTERVAL_SEC` | `12` | Seconds between sampled frames |
 | `MAX_FRAMES` | `30` | Hard cap regardless of duration (cost control) |
 | `MODEL` | `Qwen/Qwen2.5-VL-7B-Instruct` | Override to `-3B-Instruct` on small GPUs |
-| `PROMPT_PROFILE` | `trading-intelligence` | or `general-summary` |
+| `PROMPT_PROFILE` | `general-summary` | Add additional profiles in the notebook's prompt-config cell |
 | `OUTPUT_PATH` | `/work/output.json` | Where the result lands inside the Deepnote container |
 
 ## Triggering the job (curl)
 
 ```bash
-# Operator sets these once
+# Set these once
 DEEPNOTE_TOKEN='<api-key from Deepnote → Settings → API tokens>'
 DEEPNOTE_PROJECT_ID='<project-id from Deepnote project URL>'
 NOTEBOOK_ID='<notebook-id, get via GET /v1/projects/{pid}/notebooks>'
@@ -40,7 +49,7 @@ curl -X POST "https://api.deepnote.com/v1/projects/${DEEPNOTE_PROJECT_ID}/jobs" 
       "FRAME_INTERVAL_SEC": 12,
       "MAX_FRAMES":         30,
       "MODEL":              "Qwen/Qwen2.5-VL-7B-Instruct",
-      "PROMPT_PROFILE":     "trading-intelligence"
+      "PROMPT_PROFILE":     "general-summary"
     }
   }'
 # → {"notebookRunId": "nbr_abc123", "status": "queued"}
@@ -55,12 +64,11 @@ curl -s "https://api.deepnote.com/v1/projects/${DEEPNOTE_PROJECT_ID}/files/work/
   -H "Authorization: Bearer ${DEEPNOTE_TOKEN}" > output.json
 ```
 
-## Triggering from `mae-gpu-manager.mjs`
+## Reference consumer wrapper
 
-The May-3 spec called for `gpu-manager.mjs` to POST the trigger, poll for completion, read the JSON output. A reference wrapper:
+A minimal Node.js wrapper for triggering, polling, and reading the result:
 
 ```javascript
-// services/mae-gpu-manager/lib/deepnote-trigger.mjs
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const BASE = 'https://api.deepnote.com/v1';
@@ -123,36 +131,34 @@ export async function ingestVideo({ url, extractMode = 'both', maxFrames = 30 })
   "extracted_at": "2026-05-25T01:00:00Z",
   "extract_mode": "both",
   "model": "Qwen/Qwen2.5-VL-7B-Instruct",
-  "prompt_profile": "trading-intelligence",
+  "prompt_profile": "general-summary",
   "frames_analyzed": 26,
   "transcript": {
     "text": "...",
-    "segments": [{"start_sec": 0.0, "end_sec": 4.5, "text": "..."}, ...],
+    "segments": [{"start_sec": 0.0, "end_sec": 4.5, "text": "..."}],
     "segment_count": 87,
     "char_count": 5429
   },
   "aggregate": {
-    "dominant_tickers": ["BTC", "ETH", "SOL"],
-    "ticker_frame_counts": {"BTC": 18, "ETH": 11, "SOL": 4},
-    "net_sentiment": {"BTC": 0.72, "ETH": 0.45, "SOL": -0.25},
-    "macro_events_mentioned": {"FOMC Wed": 6, "CPI Thu": 3},
+    "dominant_topics": ["..."],
+    "topic_frame_counts": {"...": 18},
     "time_sensitivity_dist": {"now": 14, "this-week": 9, "longer-term": 3},
-    "speaker_confidence_dist": {"high": 16, "medium": 8, "low": 2},
-    "price_callouts": [{"ticker": "BTC", "price": 67500, "context": "support", "frame_idx": 5}]
+    "speaker_confidence_dist": {"high": 16, "medium": 8, "low": 2}
   },
-  "frames": [{ "frame_idx": 0, "timestamp_sec": 0.0, "signal": { ... } }, ...]
+  "frames": [{ "frame_idx": 0, "timestamp_sec": 0.0, "signal": { } }]
 }
 ```
 
-## Compute trade-off (post Deepnote Teams cancellation 2026-06-01)
+The `aggregate` shape is profile-dependent — the notebook's prompt-config cell
+defines what fields each `PROMPT_PROFILE` produces.
 
-Deepnote Teams subscription valid through **2026-06-01**. If this notebook works end-to-end on Deepnote's GPU tier before then, we stick with Deepnote (cheaper than Colab Pro+ for periodic batch jobs).
+## Provider fallbacks
 
-If Deepnote falls through after June 1:
-- **Fallback A**: Modal serverless GPU — same notebook, different trigger. Adapt the `mae-gpu-manager.mjs` wrapper above to hit Modal's API.
-- **Fallback B**: Colab Pro+ ($50/mo) — same notebook, run via Colab's background execution.
-- **Fallback C**: Local Ollama on tunafish — verify `localhost:11434` has a Qwen-VL variant; cheapest if available.
+If Deepnote is unavailable for any reason, the same notebook adapts to other
+GPU providers with minor trigger-side changes:
 
-## Provenance
-
-Authored 2026-05-25 in session `2d097fa8` (memory-oracle paper-side), per operator request to resurface the 2026-05-03 Task #174 spec found via `find-prior-work 'Qwen3 video YouTube'` (which surfaced the hook capture at `~/.local/share/tmux-logs/2026/05/03/hooks/mae-monorepo-build_24cbed9c-fe4f-4a61-8b86-491d4ac98f4f.log` showing the original `VIDEO_URL`/`EXTRACT_MODE` parameter spec).
+- **Modal serverless GPU** — same notebook, different trigger; adapt the wrapper
+  above to hit Modal's API.
+- **Colab Pro+** — same notebook, run via Colab's background-execution feature.
+- **Local** — verify `localhost:11434` (Ollama) or a local vLLM endpoint has a
+  Qwen-VL variant; cheapest if you already have GPU hardware.

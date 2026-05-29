@@ -92,7 +92,7 @@ export const TOOL_DEFINITIONS = {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Natural-language query. Keyword-dense queries rank better than long sentences.' },
-        project: { type: 'string', description: 'Optional project filter (e.g., "-Users-ramene--remote--plans-mae-monorepo-build")' },
+        project: { type: 'string', description: 'Optional project filter — matches the Claude Code directory encoding under ~/.claude/projects/<key>/' },
         k: { type: 'number', description: 'Top-K hits to return', default: 10 },
         budget: { type: 'number', description: 'Byte budget for merged output', default: 30000 },
       },

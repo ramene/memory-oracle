@@ -634,15 +634,16 @@ agent safety.}
 \label{sec:live-event}
 
 During the writing of this paper, a real cross-session correction
-occurred that we capture as supplemental empirical evidence. The
-operator's mae-monorepo-build session shipped a brain-cascade refactor
-(commit \texttt{5a82f50}) that obviated the cascade ordering described
-in a reference memory file. A different session (the paper-writing
-session, in a different project) quoted the stale reference. The
-operator caught the divergence in real time. A amendment record
-was written from the paper-writing session against the stale file in
-the trading project --- cross-session, cross-project, in approximately
-4 seconds of wall-clock. The filesystem watcher absorbed it; the next
+occurred that we capture as supplemental empirical evidence. A
+concurrent session in the operator's algorithmic-trading project
+shipped a brain-cascade refactor (commit \texttt{5a82f50}) that
+obviated the cascade ordering described in a reference memory file.
+A different session (the paper-writing session, in a different
+project) quoted the stale reference. The operator caught the
+divergence in real time. An amendment record was written from the
+paper-writing session against the stale file in the trading project
+--- cross-session, cross-project, in approximately 4 seconds of
+wall-clock. The filesystem watcher absorbed it; the next
 \texttt{memory-search} call from any session returns the merged
 retrieval with the corrected cascade preceding the stale assertion.
 
@@ -692,15 +693,90 @@ typical of vector top-$k$. Longer contexts increase per-call inference cost
 linearly in the attention layer; this would erode the cost parity that makes
 EBR deployable at scale. We address this at the inference layer rather than
 the substrate layer by pairing EBR with FP8 KV-cache
-compression~\cite{fp8kv2024}, deployed via the operator-authored
-TurboQuant pattern~\cite{turboquant2026} on vLLM. Empirically, FP8 KV cache
-yields $\sim 2\times$ throughput on the operator's reference deployment
-(Plutus-3B on an RTX A4000 at \$0.17/hr), which restores cost parity with
-vector-RAG while EBR retains its structural correctness on staleness. The
-pairing is an orthogonal deployment choice: the EBR substrate is unchanged;
-any equivalent compression (FP8 weights, INT8/INT4 quantization, fused
-attention kernels) substitutes cleanly. We highlight this as the natural
-production stack for EBR systems.
+compression~\cite{fp8kv2024}, deployed via the TurboQuant
+pattern~\cite{turboquant2026} on vLLM. On a 2026 reference deployment
+(Plutus-3B on an RTX A4000 at \$0.17/hr, validated in April 2026), FP8 KV
+cache yielded $\sim 2\times$ throughput, which restored cost parity with
+vector-RAG while EBR retained its structural correctness on staleness.
+That specific deployment was subsequently decommissioned for
+provider-reliability reasons; the technique itself generalises to any
+vLLM-capable provider. The pairing is an orthogonal deployment choice: the
+EBR substrate is unchanged; any equivalent compression (FP8 weights,
+INT8/INT4 quantization, fused attention kernels) substitutes cleanly. We
+highlight this as a natural production stack for EBR systems.
+
+\subsection{Pairing with Verum for Cryptographic Enforcement}
+\label{sec:ebr-verum}
+
+The EBR substrate described so far guarantees structural precedence of
+amendments over canonical content at retrieval time (Theorem~1) but it
+does \emph{not} cryptographically enforce two further properties that a
+clinical deployment requires: \emph{authorship} (which named operator
+wrote a given amendment, with non-repudiation) and \emph{immutability}
+(whether anyone, including the operator, has tampered with the amendment
+chain after the fact). We pair the EBR file-layout convention with
+\emph{Verum}~\cite{verum2026}, a companion cryptographic substrate forked
+from AGWA's git-crypt~\cite{gitcrypt2021} and extended for the EBR
+pairing. Verum is licensed under GPLv3, installs via
+\texttt{curl http://verum.sh/install}, and is usable independently for
+operators who want the cryptographic guarantees without the
+substrate-level memory semantics.
+
+\paragraph{Authorship and immutability.}
+Each amendment record gains an SSH or age signature over its JSON body;
+verification at retrieval time exposes the \texttt{amended\_by} field as a
+cryptographically attested identity rather than a self-attested string.
+Beneath the per-record signatures, Verum maintains a SHA-256 hash-chained
+access log over the amendment sequence; tampering breaks the chain, and
+verification is a single \texttt{verify-audit} call. The chain head can
+be published to a public ledger via \texttt{anchor-audit}, producing a
+third-party-checkable proof that a given chain head existed at time
+$T$ --- relevant when a chart amendment later becomes medicolegally
+contested.
+
+\paragraph{Patient-owned keys, in the precise sense the paper's title implies.}
+The paper's title claims patient-owned keys; Verum is the substrate that
+operationalises that claim. A patient's encounter-key is derived from a
+wallet-based identity that the patient controls
+(\texttt{add-wallet-recipient}); recovery from key loss uses Shamir
+$M$-of-$N$ secret sharing (\texttt{split-key} / \texttt{unlock -{}-shares}),
+distributed across designated share-holders (e.g., a primary clinician,
+a family member, an institutional custodian). No single share-holder can
+reconstruct the key, and no third party --- including the EBR platform
+operator --- has key custody by default. This is the property that makes
+``patient-owned'' a literal claim rather than a rhetorical one.
+
+\paragraph{Multi-party amendment governance.}
+Where a clinical workflow requires multiple sign-offs --- an attending
+authors, a senior physician co-signs, a compliance officer audits ---
+Verum's multi-party ACL captures the governance directly: amendments
+proposed under an $m$-of-$n$ policy commit only after the required
+SSH-signed approvals accumulate. The signing chain is visible at retrieval
+time, so the clinician's view of an amendment includes who authored, who
+co-signed, and who audited.
+
+\paragraph{Portability across substrates.}
+Amendments can be exported as portable signed artifacts
+(\texttt{export ID FILE}); a receiving institution imports and verifies
+the signature chain plus the on-chain anchor independently, without
+trusting the sending institution's substrate. This is the
+cross-substrate portability that the FHIR addendum
+standard~\cite{fhir2023,addendum2018} prescribes in principle and that
+EBR + Verum prescribes mechanically.
+
+\paragraph{EaaS-EBR and pay-to-amend.}
+Verum ships a per-license HTTP server that implements the \textbf{x402}
+payment protocol~\cite{x402spec} for automated license issuance and
+verification (\texttt{git-crypt-license serve}). Operators running EBR
+as a service can gate amendment-write operations behind per-user
+licenses anchored on-chain, with the \texttt{X-PAYMENT} /
+\texttt{402 Payment Required} handshake captured in the substrate's audit
+log alongside the authorship signature. The result is a write-path on
+which each amendment carries a cryptographically-verifiable record of
+\emph{who} authored it, \emph{when} it was made retrievable, \emph{which
+co-signers} approved it, and --- where applicable --- \emph{what
+payment} authorised it. We highlight this as the natural production
+stack for clinical EBR services.
 
 \subsection{Dual-Device Demonstration}
 
