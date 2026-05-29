@@ -458,12 +458,71 @@ co-signed, who reviewed. The JSON schema supports the additional fields triviall
 the substrate's retrieval-time merge currently treats all amendments equally; a
 \emph{multi-author precedence policy} is needed.
 
-\paragraph{Cryptographic signing.}
-Amendments are append-only on the filesystem but not cryptographically signed. A
-malicious or accidental edit to an amendment line can change what the substrate
-retrieves without leaving evidence beyond the file-system mtime. Pairing the JSONL
-sidecar with a Merkle log~\cite{shamir1979} or git-crypt~\cite{gitcrypt2021} signing
-chain is a natural next step; the file-layout convention is unaffected.
+\paragraph{Cryptographic signing --- substantially addressed via Verum.}
+\label{para:verum}
+The reference EBR substrate stores amendments as append-only JSONL on the
+filesystem, with no cryptographic enforcement of authorship or immutability:
+a malicious or accidental edit to an amendment line can change what the
+substrate retrieves without leaving evidence beyond the file-system mtime.
+We previously framed this as a near-term need for a Merkle-log or git-crypt
+signing chain~\cite{shamir1979,gitcrypt2021}.
+
+This open problem is substantially addressed by \emph{Verum}~\cite{verum2026},
+a companion substrate forked from AGWA's git-crypt~\cite{gitcrypt2021} and
+extended for the EBR pairing. Verum composes with the EBR file-layout
+convention without modifying it: the canonical-file + amendment-sidecar
+shape is preserved, but each amendment record gains cryptographic
+authorship, the amendment chain becomes hash-linked, and the chain head
+can be anchored on a public ledger. Table~\ref{tab:ebr-verum} maps each
+open problem we previously named to the corresponding Verum mechanism.
+
+\begin{table}[h]
+\centering
+\caption{EBR open problems mapped to Verum mechanisms.}
+\label{tab:ebr-verum}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.27\textwidth}p{0.30\textwidth}p{0.33\textwidth}}
+\toprule
+\textbf{EBR open problem} & \textbf{Verum mechanism} & \textbf{Operator-visible property} \\
+\midrule
+Amendment authenticity (``who authored this correction?'') &
+SSH/age signature on each amendment record; \texttt{add-age-recipient -{}-ssh} recipients are the signing identities &
+The \texttt{amended\_by} field is cryptographically verifiable rather than a self-attested string. \\
+\midrule
+Amendment immutability (``did anyone backdate or tamper?'') &
+Hash-chained access log + on-chain anchor (\texttt{audit-log}, \texttt{verify-audit}, \texttt{anchor-audit}) &
+Filesystem-level tampering breaks the chain; the on-chain anchor proves the chain head's existence at time $T$. \\
+\midrule
+Patient-/operator-owned keys (this paper's title) &
+Wallet-derived identity (\texttt{add-wallet-recipient}) + Shamir $M$-of-$N$ split (\texttt{split-key}, \texttt{unlock -{}-shares}) &
+The operator owns the key outright; recovery requires $M$ designated share-holders to cooperate, with no third party able to reconstruct the key. \\
+\midrule
+Multi-author amendment provenance &
+Multi-party {ACL} with SSH-signed proposals + role-based policy gates &
+An amendment can require, e.g., attending + senior + compliance signatures before it commits; the signing chain is visible at retrieval time. \\
+\midrule
+Cross-substrate amendment portability &
+Portable signed artifacts (\texttt{export ID FILE} / \texttt{import FILE}) + on-chain hash anchor &
+An amendment's authenticity travels with the file; a receiving substrate verifies the signature and anchor independently. \\
+\midrule
+Pay-to-amend / EaaS-EBR &
+{x402}~\cite{x402spec} HTTP licensing server (\texttt{git-crypt-license serve}) &
+Operators running EBR-as-a-service can gate amendment-write operations behind issued per-user licenses, automated via the {x402} protocol. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Five of the six open problems we previously named are now implemented in
+Verum, leaving one open: \emph{multi-author precedence under partial
+disagreement} --- when two co-equal operators write contradictory
+amendments, the substrate currently lets the later one win by timestamp,
+which is the wrong semantics for clinical consensus medicine and for any
+setting where disagreement itself is the load-bearing signal. We treat
+this as future work. The Verum substrate is licensed under GPLv3 and is
+usable independently of the EBR file-layout convention for operators who
+want the cryptographic guarantees without the substrate-level memory
+semantics.
 
 \paragraph{Cross-substrate amendment portability.}
 The amendment sidecar is a file-layout convention, not a wire protocol. Two distinct

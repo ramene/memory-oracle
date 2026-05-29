@@ -9,10 +9,26 @@
 
 @misc{turboquant2026,
   author       = {Anthony, Ramene},
-  title        = {{TurboQuant}: {FP8} {KV}-Cache Inference for Finance {LLM}s --- From Concept to 2$\times$ Throughput on {RunPod} at \$0.17/hr},
+  title        = {{TurboQuant}: {FP8} {KV}-Cache Inference for Finance {LLM}s --- A Reference Deployment (2026)},
   year         = {2026},
   howpublished = {\url{https://github.com/ramene/turboquant-plutus}},
-  note         = {Operator-branded deployment pattern; underlying technique is FP8 KV cache via vLLM \cite{fp8kv2024}}
+  note         = {Historical reference deployment: 2$\times$ throughput demonstrated on a vLLM-based stack with FP8 KV cache, validated at \$0.17/hr on RTX A4000 in April 2026; subsequently decommissioned for provider-reliability reasons. Technique remains valid on any vLLM-capable provider. Underlying technique is FP8 KV cache via vLLM \cite{fp8kv2024}.}
+}
+
+@misc{verum2026,
+  author       = {Anthony, Ramene},
+  title        = {Verum: A Cryptographic Substrate for Evidence-Bound Retrieval --- Multi-Party {ACL}, Signed Amendments, On-Chain Audit Anchoring},
+  year         = {2026},
+  howpublished = {\url{https://github.com/ramene/verum}},
+  note         = {Reference implementation pairing the EBR amendment substrate with cryptographic identity (age + SSH + wallet), signed authorship, hash-chained audit logs, Shamir $M$-of-$N$ key recovery, multi-party {ACL} with policy gates, on-chain audit anchoring, and an {x402} HTTP licensing server. Install via \texttt{curl http://verum.sh/install}. Forked from AGWA's \texttt{git-crypt} \cite{gitcrypt2021} and substantially extended.}
+}
+
+@misc{x402spec,
+  author       = {{x402 Working Group}},
+  title        = {{HTTP 402} Payment Required --- The {x402} Protocol},
+  year         = {2025},
+  howpublished = {\url{https://www.x402.org/}},
+  note         = {Open specification for HTTP-native micropayments using cryptographic payment proofs over the HTTP 402 status code.}
 }
 
 @inproceedings{fp8kv2024,
