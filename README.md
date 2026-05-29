@@ -181,7 +181,8 @@ memory-oracle/
 │   ├── blog/                     #    Companion CTA posts
 │   ├── figures/                  #    Paper figures (PNG)
 │   └── EVIDENCE-OF-PLATFORM.md   #    The substrate's self-evidence — why it works in production
-├── docs/                         # Genesis docs: ADR, retrieval-contract spec, failure-mode triage
+├── docs/                         # Current docs (comparison, privacy, trust model)
+│   └── genesis/                  # Originating-incident archive (ADR, contract spec, failure-mode triage)
 ├── packages/go-cli/              # Standalone Go binary of memory-search (single static executable)
 ├── tests/                        # Litmus scripts proving the precedence invariant holds
 ├── install.sh                    # Idempotent installer
@@ -207,6 +208,6 @@ MIT.
 
 memory-oracle began as a one-session fix for a single observed failure: an AI agent confidently quoting a memory file two weeks after the world had moved on. The substrate evolved over eleven days into a Springer-LNCS clinical-AI paper, a CoALA position paper, three Colab-runnable case-study notebooks, a real-corpus probe of the author's own production memory bank (6/6 retrievable cross-session corrections), and an MIT-licensed reference implementation.
 
-The originating incident-triage, the retrieval-stack ADR, and the failure-mode taxonomy live in [`docs/`](docs/) as a record of how the substrate was reasoned into existence.
+The originating incident-triage, the retrieval-stack ADR, and the failure-mode taxonomy live in [`docs/genesis/`](docs/genesis/) as a preserved archive of how the substrate was reasoned into existence. They contain pre-scrub operator-specific naming and are not part of the substrate's public-facing surface — see the [`docs/genesis/README.md`](docs/genesis/README.md) callout.
 
 Direct intellectual ancestor: Nate Jones's [*The New RAG War Is Not About Vectors*](https://natebjones.substack.com/p/the-new-rag-war-is-not-about-vectors) — the systems framing that named why vector retrieval was the wrong primitive for AI-agent memory. The substrate is the architecture that answers his framing.
