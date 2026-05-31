@@ -326,6 +326,75 @@ The three tiers cover the typical question shapes a CoALA-style agent asks of it
 episodic layer (current-state lookup, surface-level enumeration, full-history audit)
 without forcing any one tier to do all three jobs.
 
+\subsection{Append-with-extraction versus append-with-supersession}
+\label{sec:append-vs-supersession}
+
+\noindent
+The append-only property at the storage layer is necessary but not
+sufficient for amendment-grade memory governance. Two distinct
+architectures both append-only at the storage layer can have
+fundamentally different retrieval semantics, with materially different
+implications for HIPAA-grade workflows, financial audit, and clinical
+correction.
+
+The first architecture is \emph{append-with-extraction}: the substrate
+appends raw messages, and an LLM extractor reads new messages and
+decides what to write to the memory recall surface. The extractor's
+policy is non-deterministic; the same input can produce three different
+outcomes:
+
+\begin{enumerate}
+  \item A \emph{layered} write that preserves both prior records
+        alongside the new one (memory recall returns multiple records;
+        no structural rule says the new one dominates);
+  \item A \emph{summarize-away} write that consolidates conflicting
+        records into a derived synthesis and removes the originals from
+        memory recall (though they remain in the underlying thread);
+  \item An \emph{override} write that retains the new record and
+        silently drops the prior.
+\end{enumerate}
+
+\noindent
+This is the design of Oracle's Agent Memory Platform when
+\texttt{extract\_memories=True}~\cite{oracleOAMP2026}, the default
+configuration in the benchmark notebook~\cite{oracleAgentMemoryBenchmarks2026}.
+
+The second architecture is \emph{append-with-supersession}: the substrate
+appends amendment records that carry explicit \texttt{supersedes}
+pointers to the canonical records they amend. At retrieval, the substrate
+deterministically returns the head of the supersession
+chain---the amendment---while preserving the canonical record for
+historical retrieval via a separate query surface. This is EBR's design.
+
+The two architectures converge on append-only at the \emph{storage}
+layer but diverge at the \emph{retrieval} layer. Under
+append-with-extraction, the dominant record at retrieval is determined
+by extractor policy plus cosine ranking; under append-with-supersession,
+the dominant record is determined by an explicit structural pointer.
+For unregulated chat agents, the difference may be inconsequential; for
+workflows where the retrieved value will be acted upon---clinical
+treatment decisions, financial position adjustments, regulatory
+amendments---only the structural guarantee suffices.
+
+The distinction is empirically observable. The companion benchmark
+notebook \texttt{oracle-style-comparison.ipynb} runs the same 80-turn
+dialogue scenario through both architectures with a synthetic amendment
+at turn 47. Among the three OAMP extractor policies, only
+\emph{override} satisfies A1 (amendment dominates), only \emph{layer}
+satisfies A2 (original preserved), and \emph{none} satisfies either A3
+(structural chain) or A4 (typed provenance). EBR satisfies all four by
+construction (Theorem~\ref{thm:precedence}). The full results matrix
+appears in \S5.4 of the companion clinical-AI paper alongside the
+HIPAA-grade discussion.
+
+The implication for the CoALA framework is that EBR is not a substitute
+for the four canonical memory types (working, semantic, procedural,
+episodic) but a discipline that can be applied to the episodic-memory
+layer of any of them. The append-with-supersession pattern is portable
+to JSONL substrates, relational substrates, vector substrates, and graph
+substrates with no change in semantics. The substrate-shape constraint
+is on the retrieval contract, not on the storage choice.
+
 \section{Empirical Evidence}
 \label{sec:empirical}
 
