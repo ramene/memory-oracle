@@ -220,3 +220,59 @@
   url          = {https://youtu.be/BacJ6sEhqMo},
   note         = {Educational video presenting the CoALA framework \cite{sumers2024coala}; accessed 2026-05-27}
 }
+
+@misc{oracleOAMP2026,
+  author       = {{Oracle Corporation}},
+  title        = {Oracle {AI} Agent Memory ({OAMP})},
+  year         = {2026},
+  howpublished = {\url{https://www.oracle.com/database/ai-agent-memory/}},
+  note         = {Production agent-memory product on Oracle AI Database; exposes \texttt{add\_memory}, \texttt{delete\_memory}, and \texttt{extract\_memories} primitives over a converged vector + JSON + relational engine. Accessed 2026-05-30.}
+}
+
+@misc{oracleAgentMemoryBenchmarks2026,
+  author       = {{Oracle Developer Relations}},
+  title        = {{OAMP} vs Naive Memory Benchmarks --- 80-turn dialogue with tokens / latency / {LLM}-judge axes},
+  year         = {2026},
+  howpublished = {\url{https://github.com/oracle-devrel/oracle-ai-developer-hub/blob/main/notebooks/agent_memory/oracle_agent_memory_benchmarks.ipynb}},
+  note         = {Reference benchmark notebook comparing three agent variants. The amendment-grade assertion suite (A1--A4) added by this paper's companion notebook \texttt{oracle-style-comparison.ipynb} adopts the same 80-turn discipline. Accessed 2026-05-30.}
+}
+
+@misc{anthropicMemoryDreaming2026,
+  author       = {{Anthropic}},
+  title        = {Claude Memory and Dreaming Mode},
+  year         = {2026},
+  howpublished = {\url{https://www.anthropic.com/news/}},
+  note         = {Agent-memory architecture with explicit session consolidation. Source extraction (\texttt{src/services/autoDream/consolidationPrompt.ts}) reveals the consolidation instruction: ``Delete contradicted facts --- fix it at the source.'' Accessed 2026-04 and 2026-05-30. \emph{TODO: pin URL to formal announcement at finalization.}}
+}
+
+@misc{hipaaAmendment,
+  author       = {{U.S. Department of Health and Human Services}},
+  title        = {{HIPAA} Privacy Rule \S 164.526 --- Right to Amend Protected Health Information},
+  year         = {2002},
+  howpublished = {\url{https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164/subpart-E/section-164.526}},
+  note         = {Federal regulation requiring covered entities to permit amendment of records in the designated record set, with original and amendment preserved together. Cited as the regulatory shape that EBR's append-never-mutate substrate satisfies by construction. Accessed 2026-05-30.}
+}
+
+@misc{oracleOAMP2026,
+  author       = {{Oracle Corporation}},
+  title        = {Oracle {AI} Agent Memory ({OAMP})},
+  year         = {2026},
+  howpublished = {\url{https://www.oracle.com/database/ai-agent-memory/}},
+  note         = {Production agent-memory product on Oracle AI Database; exposes \texttt{add\_memory}, \texttt{delete\_memory}, and \texttt{extract\_memories} primitives. Accessed 2026-05-30.}
+}
+
+@misc{oracleAgentMemoryBenchmarks2026,
+  author       = {{Oracle Developer Relations}},
+  title        = {{OAMP} vs Naive Memory Benchmarks --- 80-turn dialogue with tokens / latency / {LLM}-judge axes},
+  year         = {2026},
+  howpublished = {\url{https://github.com/oracle-devrel/oracle-ai-developer-hub/blob/main/notebooks/agent_memory/oracle_agent_memory_benchmarks.ipynb}},
+  note         = {Reference benchmark notebook. The companion \texttt{oracle-style-comparison.ipynb} extends it with the amendment-grade A1--A4 assertions. Accessed 2026-05-30.}
+}
+
+@misc{anthropicMemoryDreaming2026,
+  author       = {{Anthropic}},
+  title        = {Claude Memory and Dreaming Mode},
+  year         = {2026},
+  howpublished = {\url{https://www.anthropic.com/news/}},
+  note         = {Agent-memory architecture with session consolidation. Source extraction (\texttt{src/services/autoDream/consolidationPrompt.ts}) reveals the consolidation instruction: ``Delete contradicted facts --- fix it at the source.'' Accessed 2026-04 and 2026-05-30.}
+}

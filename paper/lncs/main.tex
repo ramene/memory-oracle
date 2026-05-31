@@ -463,6 +463,91 @@ probabilistic.
 
 \input{figures/F2-precedence.tex}
 
+\subsection{HIPAA Amendment Semantics: Why the Substrate Shape Matters}
+\label{sec:hipaa-semantics}
+
+The warfarin-to-apixaban scenario is not a stylized contrivance. HIPAA's
+Right to Amend provision (45\,CFR\,164.526)~\cite{hipaaAmendment} entitles
+patients (or authorized providers) to amend records in their designated
+record set, and requires covered entities to preserve \emph{both} the
+original assertion and the amendment in retrievable form for the life of
+the record. The regulatory shape is concrete: the original warfarin
+protocol must remain visible \emph{alongside} the apixaban amendment,
+accessible to any retrieval that would otherwise return the stale 2008
+record. The substrate's job is not to choose between them; it is to
+ensure the corrected record is returned with the original preserved
+beside it.
+
+This constraint is incompatible with several common memory substrate
+designs. Three failure modes appear in production agent-memory products:
+
+\begin{enumerate}
+  \item \textbf{Delete-then-add correction.} Oracle's Agent Memory
+    Platform (OAMP)~\cite{oracleOAMP2026} exposes a \texttt{delete\_memory}
+    primitive intended for correction workflows. Once invoked, the
+    original record is unrecoverable from the substrate itself; HIPAA's
+    preservation requirement is delegated to an external Audit Vault
+    add-on. The substrate-of-truth model breaks at the moment of
+    correction.
+  \item \textbf{Append-with-extraction.} OAMP's primary production mode
+    appends new messages and runs an LLM extractor that synthesizes
+    memories from the thread. The extractor's policy is
+    non-deterministic: under a \emph{summarize-away} policy the extractor
+    consolidates conflicting messages into a derived synthesis and
+    removes the originals from the memory recall path; even under a
+    \emph{layered} policy that preserves both records, no structural rule
+    guarantees the amendment dominates the original at retrieval. The
+    result is probabilistic, not enforced. Section~\ref{sec:append-vs-supersession}
+    of the companion CoALA position paper develops the contrast.
+  \item \textbf{Mutation via consolidation.} Anthropic's Memory + Dreaming
+    architecture~\cite{anthropicMemoryDreaming2026} consolidates session
+    transcripts through an explicit instruction to ``delete contradicted
+    facts---fix it at the source.'' This is the mutation model EBR is
+    designed to prevent; empirical extraction of the consolidation prompt
+    from the public source release confirms the
+    contradiction-as-deletion semantic.
+\end{enumerate}
+
+EBR's append-never-mutate plus structural-precedence invariant
+(Theorem~\ref{thm:precedence}) is the architectural shape HIPAA's
+amendment semantics require. The amendment record carries an explicit
+\texttt{supersedes} pointer to the canonical record it amends; the
+canonical record is structurally preserved by the substrate (never
+deleted, never summarized away); and the merge procedure deterministically
+places the amendment before the superseded assertion at retrieval. The
+substrate enforces the amendment-grade semantic by construction, not by
+operator discipline.
+
+We provide an empirical anchor in the form of a benchmark notebook
+(\texttt{notebooks/memory-oracle/oracle-style-comparison.ipynb} in the
+companion repository) adopting the discipline of Oracle's published
+80-turn dialogue benchmark~\cite{oracleAgentMemoryBenchmarks2026} but
+extended with the amendment-grade assertion suite. The matrix has the
+shape:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Substrate & A1 dominates & A2 preserved & A3 chain & A4 typed \\
+\midrule
+OAMP delete-mode               & \checkmark & $\times$    & $\times$    & $\times$    \\
+OAMP append (layer)            & $\times$    & \checkmark & $\times$    & $\times$    \\
+OAMP append (summarize-away)   & $\times$    & $\times$    & $\times$    & $\times$    \\
+OAMP append (override)         & \checkmark & $\times$    & $\times$    & $\times$    \\
+EBR                            & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each OAMP variant fails the suite in a different pattern (delete-mode
+loses A2; layer fails A1; summarize-away fails both; override loses A2),
+but \emph{none} satisfies all four by construction. Only EBR enforces the
+amendment-grade semantic structurally. This is not a claim that OAMP is
+broken---OAMP is a perfectly capable production substrate for unregulated
+workloads---but rather that the shape of the substrate determines whether
+HIPAA-grade amendment workflows can be enforced inside the substrate or
+must be implemented as bolt-on application logic against an audit trail.
+
 \subsection{Reproducibility}
 
 The full case study reproduces in 30 seconds:
