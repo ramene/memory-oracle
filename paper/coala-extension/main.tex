@@ -205,7 +205,18 @@ first by construction. That is the EBR proposal.
 
 \noindent
 Evidence-Bound Retrieval (EBR) is a property of a retrieval substrate, not an algorithm
-on top of one. The property is:
+on top of one. Crucially, it is also not a particular \emph{substrate}: the
+property can be realised on top of any append-capable store---JSONL sidecars
+on the file system, relational rows in PostgreSQL or Oracle 23ai, vector
+chunks in MongoDB or pgvector, or graph nodes in a property
+graph~\cite{oracleOAMP2026, mongoMemoriz2026}. The substrate-shape constraint
+EBR imposes is on the \emph{retrieval contract} (Theorem~\ref{thm:precedence}),
+not on the storage choice. This composability is what lets EBR be added as a
+governance layer to existing production agent-memory products without
+replacing them.
+
+\noindent
+The property is:
 
 \begin{definition}[Evidence binding]
 \label{def:ebr}
@@ -593,6 +604,22 @@ usable independently of the EBR file-layout convention for operators who
 want the cryptographic guarantees without the substrate-level memory
 semantics.
 
+\paragraph{Context-card abstraction (\texttt{accretion.get\_citation\_card}).}
+A useful pairing API---surfaced by the OAMP comparison in
+\S\ref{sec:append-vs-supersession}---is a substrate-native
+\texttt{get\_citation\_card(subject)} primitive that returns the head
+amendment plus its supersession chain in a single bundled response. Oracle
+exposes the analogous \texttt{thread.get\_context\_card()} for cosine-ranked
+extracted memories; EBR's citation-card is its audit-grade counterpart,
+returning the head plus the structurally-ordered chain back to the original
+assertion. The two API shapes have different selection rules
+(cosine-and-recency vs structural supersession) and different determinism
+guarantees (probabilistic vs deterministic), but share an envelope so an
+agent loop can route by workflow class. The detailed contrast appears in the
+companion clinical-AI paper~\S7.4. Implementation is straightforward atop the
+existing precedence-invariant query path; cross-language parity (Node and Go
+adapters in the accretive-substrate reference repository) is in progress.
+
 \paragraph{Cross-substrate amendment portability.}
 The amendment sidecar is a file-layout convention, not a wire protocol. Two distinct
 substrates that both adopt the convention can read each other's amendments by file
@@ -650,6 +677,42 @@ proximate cause of this paper: they named the four memory types, articulated the
 episodic-layer problem, and provided the vocabulary in which we can ask ``what would a
 production-grade episodic-memory substrate look like?'' This paper is a direct response
 to that question.
+
+\noindent
+\textbf{Substrate-layer agent-memory products.} A separate line of recent work ships
+production agent-memory substrates as opinionated products. Oracle's Agent Memory
+Platform (OAMP)~\cite{oracleOAMP2026} exposes a stack of \texttt{add\_memory},
+\texttt{delete\_memory}, and \texttt{extract\_memories} primitives over a converged
+Oracle 23ai vector + JSON + relational engine. The product page and developer guide
+adopt the four CoALA memory types (working, semantic, procedural, episodic) as the
+organising vocabulary without citing CoALA itself, which we note as a small datapoint
+on the framework's reach into commercial deployment. The
+amendment-grade assertion suite (\S\ref{sec:append-vs-supersession}) reveals that OAMP's
+correction modes do not enforce the amendment-grade semantic by construction; this is
+not a critique of OAMP as a substrate, but a clarification of where the substrate ends
+and the governance layer begins. OAMP and EBR compose.
+
+\noindent
+\textbf{Anthropic Memory and Dreaming.} Anthropic's Memory and Dreaming
+mode~\cite{anthropicMemoryDreaming2026} ships a session-consolidation architecture in
+which an offline pass rewrites the agent's memory store via an LLM consolidator. The
+public source release includes a consolidation prompt template
+(\texttt{src/services/autoDream/consolidationPrompt.ts}) that instructs the model
+verbatim: \emph{``Delete contradicted facts---fix it at the source.''} This is the
+mutation semantic EBR is designed to prevent. We treat the public emergence of this
+pattern as empirical evidence that the append-never-mutate constraint is not obvious
+from first principles---major industry deployments are converging on
+contradiction-as-deletion---and as direct motivation for the governance discipline EBR
+codifies. Anthropic's architecture is otherwise sound; the operational concern is the
+specific instruction the consolidator carries, not the consolidation step itself.
+
+\noindent
+\textbf{MongoDB Memoriz.} MongoDB's Memoriz library~\cite{mongoMemoriz2026} provides a
+similar consolidate-and-replace pattern on top of Atlas Vector Search. The same
+substrate-layer-vs-governance-layer framing applies: Memoriz answers the storage and
+retrieval questions; EBR's precedence invariant and typed provenance are layerable on
+top of it. The composition is unevaluated here but follows the same shape as the OAMP
+composition.
 
 \section{Conclusion}
 \label{sec:conclusion}
