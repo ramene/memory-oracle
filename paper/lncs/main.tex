@@ -193,6 +193,30 @@ embedding. Memory frameworks like MemGPT~\cite{memgpt2023} and
 LangMem~\cite{langmem2024} share this property because their corrections are
 new memories rather than provenance-preserving amendments.
 
+\subsection{Substrate-Layer Agent Memory Products}
+\label{sec:related-substrates}
+
+A new generation of production agent-memory products---Oracle's Agent Memory
+Platform (OAMP)~\cite{oracleOAMP2026}, Anthropic's Memory and Dreaming
+mode~\cite{anthropicMemoryDreaming2026}, and MongoDB's
+Memoriz~\cite{mongoMemoriz2026}---ships an opinionated stack for storing and
+retrieving agent memory on top of a converged store (Oracle 23ai vector +
+JSON + relational; Anthropic session JSONL with consolidation;
+MongoDB Atlas Vector Search). These offerings operate at the
+\emph{substrate} layer: they answer ``where do memories live, and how are
+they retrieved?'' EBR operates at the \emph{governance / corrigibility}
+layer: it answers ``who authored this, when can it be retracted, and how
+does a correction structurally dominate older statements at retrieval
+time?'' EBR's primitives can run on any of these substrates---the two
+compose~\cite{oracleAgentMemoryBenchmarks2026}---which is why we frame EBR
+as a discipline applied to a substrate rather than as a substrate itself.
+
+The empirical contrast appears in \S\ref{sec:hipaa-semantics}. OAMP's
+correction modes and Anthropic Dreaming's consolidation both fail the
+amendment-grade assertion suite A1--A4 in distinct patterns; EBR satisfies
+all four by construction. MongoDB Memoriz adopts a similar
+auto-distillation pattern and inherits the same governance gap.
+
 \subsection{Retrieve-Evaluate-Correct Approaches}
 
 A second line of work --- exemplified by CRAG (Corrective
@@ -789,6 +813,88 @@ vLLM-capable provider. The pairing is an orthogonal deployment choice: the
 EBR substrate is unchanged; any equivalent compression (FP8 weights,
 INT8/INT4 quantization, fused attention kernels) substitutes cleanly. We
 highlight this as a natural production stack for EBR systems.
+
+\subsection{Cache-Aware Prompt Assembly}
+\label{sec:cache-aware}
+
+A subtle implementation consideration emerges from Oracle's published
+benchmark of OAMP versus a naive flat-history
+baseline~\cite{oracleAgentMemoryBenchmarks2026}. Oracle's Benchmark~4
+documents that an agent which assembles its prompt as ``system + retrieved
+context-card + latest user message'' on every turn defeats the LLM
+provider's automatic prompt-prefix caching: because the retrieved card
+changes from turn to turn, no byte-identical prefix repeats, and every
+inference call pays full prefill cost. The naive flat-history agent, by
+contrast, is append-only at the prompt boundary and trivially cache-hits.
+
+EBR's structural prepend has the same shape and the same risk. Each
+amendment landing in the canonical file alters the merged retrieval
+output, which alters the prompt's prefix, which breaks cache. We document
+two mitigations:
+
+\begin{enumerate}
+  \item \textbf{Suffix-prepend with stable header.} Place a byte-stable
+    header at the front of the assembled prompt (system message, slowly
+    changing core memory), and append the freshly-merged amendment block
+    at the \emph{end} of the latest user message rather than the front.
+    The first $\geq$1024 cached tokens are what matters for OpenAI's
+    prefix cache; the small dynamic tail costs almost nothing.
+  \item \textbf{Cacheable citation card.} Expose an
+    \texttt{accretion.get\_citation\_card(subject)} API
+    (\S\ref{sec:citation-card}) that returns a compact amendment-chain
+    bundle in a stable serialization. Pair with periodic compaction
+    (every $N$ turns the latest snapshot becomes the new cacheable
+    prefix), accepting one cache reset per snapshot rather than one per
+    turn.
+\end{enumerate}
+
+The trade-off Oracle observed---token efficiency versus latency---applies
+to any retrieval pattern that mutates the prompt prefix. We acknowledge
+the cost honestly: a naive EBR prepend will lose to a flat-history agent
+on latency under sustained inference traffic, even though it wins on
+correctness in the regulated-domain cases where stale-correction
+detection matters. The mitigations above recover most of the cache hit
+without sacrificing the precedence invariant.
+
+\subsection{Context-Card Comparison: OAMP vs EBR}
+\label{sec:citation-card}
+
+Oracle exposes a \texttt{thread.get\_context\_card()} primitive that
+returns an XML-formatted, query-relevant, compact summary of the
+extracted memories most relevant to the current turn---a convenience for
+the agent loop that hides retrieval details behind a single
+call~\cite{oracleOAMP2026}. EBR's analogue is
+\texttt{accretion.get\_citation\_card()}: a parallel API that bundles
+the head amendment plus the citation chain (each prior assertion the
+amendment supersedes, in supersession order) into a canonical
+serialization. Table~\ref{tab:context-vs-citation} contrasts the two.
+
+\begin{table}[h]
+\centering
+\caption{Context-card (OAMP) vs citation-card (EBR) API shape.}
+\label{tab:context-vs-citation}
+\small
+\begin{tabular}{p{0.20\textwidth}p{0.35\textwidth}p{0.35\textwidth}}
+\toprule
+\textbf{Property} & \textbf{OAMP \texttt{get\_context\_card}} & \textbf{EBR \texttt{get\_citation\_card}} \\
+\midrule
+Selection rule & Cosine + recency ranking over extracted memories & Head of supersession chain (Theorem~\ref{thm:precedence}) \\
+Ordering & Implicit (ranker decides) & Structural (\texttt{supersedes} pointer) \\
+Includes prior versions? & No (head only) & Yes (chain back to original) \\
+Citation strings & Optional metadata & Required field per amendment \\
+Determinism & Probabilistic (ranking) & Deterministic (structural) \\
+Auditability & Requires external Audit Vault & Substrate-native \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two APIs are not in competition; an EBR governance layer composed
+on top of an OAMP substrate would expose \texttt{get\_citation\_card}
+as the audit-grade retrieval primitive and could continue to use
+\texttt{get\_context\_card} for the cosine-friendly hot-path retrieval
+where amendment-grade governance is not required. The cards share a
+serialization envelope so the agent loop can route between them by
+workflow class.
 
 \subsection{Pairing with Verum for Cryptographic Enforcement}
 \label{sec:ebr-verum}
