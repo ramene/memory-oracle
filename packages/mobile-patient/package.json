@@ -1,7 +1,7 @@
 {
-  "name": "@memory-oracle/mobile",
+  "name": "@memory-oracle/mobile-patient",
   "version": "0.1.0",
-  "description": "Clinician-side QR scanner + patient-contact decryption — POC for memory-oracle clinical deployment",
+  "description": "Patient-side encounter-approval app — Face ID gates release of wrapped session keys to clinicians. Phase 3 of the Verum biometric-unlock rollout (LNCS §7.4 dual-device demo).",
   "main": "index.js",
   "scripts": {
     "start": "expo start",

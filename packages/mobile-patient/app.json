@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "memory-oracle Patient",
+    "slug": "memory-oracle-patient",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ai.memoryoracle.patient",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Face ID approves a clinician's request to access your memory namespace for a single encounter. Your private key never leaves this device's Secure Enclave; Face ID only releases a time-limited wrapped key to the clinician.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.memoryoracle.patient",
+      "permissions": []
+    },
+    "plugins": []
+  }
+}
