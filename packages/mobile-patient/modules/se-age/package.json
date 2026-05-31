@@ -1,0 +1,10 @@
+{
+  "name": "se-age",
+  "version": "0.1.0",
+  "description": "Apple Secure Enclave-backed age recipients (age1se1...) for the memory-oracle Patient app — Phase 3b of the Verum biometric-unlock rollout",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "author": "memory-oracle contributors",
+  "license": "MIT",
+  "private": true
+}

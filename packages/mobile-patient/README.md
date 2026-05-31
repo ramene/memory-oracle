@@ -6,8 +6,9 @@
 > [`verum add-age-recipient --se`](https://github.com/ramene/verum) on the
 > clinician's Mac.
 >
-> **Status:** 3a — rename + scaffold only. Compiles and runs; no real Face
-> ID gating yet, no relay wiring yet. Tracking plan:
+> **Status:** 3b — Secure Enclave + Face ID wired via the local
+> [`se-age`](./modules/se-age/) native module. Code-complete; on-device
+> validation pending. Tracking plan:
 > `.claude/plans/verum-phase-3-ios-faceid-dual-device-20260531.md`.
 
 ## What this app will do (3a + 3b + 3c)
@@ -29,42 +30,72 @@
 8. Audit entry written to `SecureStore`-backed log (mirror in 3c to the
    memory-oracle audit endpoint for the HIPAA §164.526 trail).
 
-## What 3a actually shipped
+## What 3a + 3b shipped
 
-- Directory renamed from `packages/mobile/` → `packages/mobile-patient/`
-- App display name: `memory-oracle Patient`; slug:
-  `memory-oracle-patient`; iOS bundle id: `ai.memoryoracle.patient`
-- iOS `NSCameraUsageDescription` removed (patient doesn't scan)
-- iOS `NSFaceIDUsageDescription` rewritten for consent-approval context
-- Android `CAMERA` permission removed
-- `App.js` replaced with a scaffold that shows:
-  - "Pending requests" screen (always empty in 3a — no relay yet)
-  - Placeholder "Record approval" button (writes an audit entry; no real
-    Face ID, no real key release)
-  - Audit log viewer (last 10 entries)
-- `demo/generate-patient-qr.html` and `demo/unlock-patient.sh` preserved
-  in place as **reference material for 3c** (clinician-side QR format the
-  patient app will need to interoperate with — not used by this app
-  directly).
+**3a (rename):**
+- Directory renamed `packages/mobile/` → `packages/mobile-patient/`
+- App identity: `memory-oracle Patient`; slug `memory-oracle-patient`;
+  iOS bundle `ai.memoryoracle.patient`
+- Camera permissions stripped (patient doesn't scan)
+- `NSFaceIDUsageDescription` rewritten for consent-approval context
 
-## How to run the scaffold
+**3b (Secure Enclave wiring):**
+- New local Expo native module: [`modules/se-age/`](./modules/se-age/)
+  - Swift impl uses `SecureEnclave.P256.KeyAgreement.PrivateKey` (CryptoKit)
+  - Access control: `[.privateKeyUsage, .userPresence]` — matches macOS
+    verum `--se` default of `any-biometry-or-passcode`
+  - Bech32 (BIP-173) impl cross-validated against actual `age-plugin-se`
+    output: roundtrip-identical for the recipient produced on the
+    Sequoia Mac (2026-05-31)
+- `expo-camera` + `@expo/ngrok` removed from deps (dead since 3a)
+- `App.js` now:
+  - Detects Secure Enclave availability on boot
+  - "Generate Secure Enclave identity" button → calls
+    `SeAge.getOrCreateIdentity()` and displays the `age1se1...` recipient
+  - "Test Face ID + ECDH (self-pair)" button → fires Face ID, performs
+    ECDH with the patient's own recipient, displays truncated shared
+    secret on success
+  - Audit log records each operation
+- `demo/` preserved as 3c reference material (clinician-side QR format)
+
+## How to build + run (3b — Expo Go no longer supported)
+
+The custom Swift module requires a dev build:
 
 ```bash
 cd packages/mobile-patient
 npm install
-npx expo start --tunnel
+npx expo prebuild --platform ios     # generates ios/ + Podfile
+cd ios && pod install && cd ..
+npx expo run:ios --device            # build + install on plugged-in iPhone
 ```
 
-Scan the QR code in the terminal with Expo Go on a real iPhone (Secure
-Enclave operations in 3b will not work on the iOS Simulator). You should
-see:
+On the iPhone you should see:
 
-- "memory-oracle Patient" title + "Phase 3a scaffold" subtitle
-- A yellow scaffold notice explaining what's missing
-- An empty pending-requests box
-- A placeholder approval button that just adds an audit entry
+- "memory-oracle Patient" title + "Phase 3b · Secure Enclave wired"
+- A yellow notice explaining the 3b smoke-test scope
+- "Generate Secure Enclave identity" button — first tap creates a
+  Secure Enclave key (no Face ID; keygen is non-interactive) and shows
+  the `age1se1...` recipient
+- "Test Face ID + ECDH (self-pair)" button — Face ID prompt fires; on
+  approval, shows truncated 32-byte shared secret
+- Audit log accumulates entries
 
-If that renders, 3a is good and we move to 3b (the native SE module).
+**Will NOT work in iOS Simulator** — `SecureEnclave.isAvailable` returns
+false. The app surfaces this with an error screen.
+
+**Cross-validation against macOS verum:**
+
+After generating the iPhone recipient, copy it to a Mac and verify that
+`age` accepts it as a recipient:
+
+```bash
+echo 'test plaintext' | age -r 'age1se1q...iphone_recipient...' > test.age
+ls -l test.age   # produced; age accepted the recipient format
+```
+
+Full decrypt-on-iPhone of a macOS-produced ciphertext lives in 3c
+(needs the age stanza parser + HKDF-wrap unwind).
 
 ## What's POC vs production
 
