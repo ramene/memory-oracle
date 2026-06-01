@@ -92,7 +92,80 @@ PYEOF
 echo "── pbxproj state after patch ──"
 grep -E 'PRODUCT_BUNDLE_IDENTIFIER|INFOPLIST_KEY_NSFaceIDUsageDescription|DEVELOPMENT_TEAM' "$PBXPROJ" | sort -u | sed 's/^/    /'
 
-# ── 5. Done — give the operator the next step ────────────────────────────
+# ── 5. Write a complete Info.plist with our ATS dict + disable synthesis ──
+# Xcode 14+ behavior: when GENERATE_INFOPLIST_FILE = YES, Xcode IGNORES the
+# INFOPLIST_FILE path and synthesizes from INFOPLIST_KEY_* build settings
+# instead. Synthesis can't express complex dict values (NSAppTransportSecurity
+# is a dict, not a string), so we must turn synthesis OFF and provide a
+# complete Info.plist that reproduces the keys synthesis was supplying.
+echo "── [5] write complete Info.plist (includes ATS for the LAN-IP demo) ──"
+INFOPLIST="$PROJ_DIR/Info.plist"
+cat > "$INFOPLIST" <<'PLISTEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID approves a clinician request to access your memory namespace for a single encounter. Your private key never leaves this device's Secure Enclave; Face ID only releases a time-limited wrapped key to the clinician.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>
+PLISTEOF
+echo "    ✓ Info.plist written ($(wc -l < "$INFOPLIST" | tr -d ' ') lines)"
+
+# ── 6. Turn off GENERATE_INFOPLIST_FILE in pbxproj ───────────────────────
+echo "── [6] disable GENERATE_INFOPLIST_FILE in pbxproj ──"
+sed -i '' 's|GENERATE_INFOPLIST_FILE = YES;|GENERATE_INFOPLIST_FILE = NO;|g' "$PBXPROJ"
+grep GENERATE_INFOPLIST_FILE "$PBXPROJ" | sort -u | sed 's/^/    /'
+grep '^[[:space:]]*INFOPLIST_FILE' "$PBXPROJ" | sort -u | sed 's/^/    /'
+
+# ── 7. Done — give the operator the next step ────────────────────────────
 cat <<EOF
 
 ═════════════════════════════════════════════════════════════════════
@@ -102,16 +175,8 @@ cat <<EOF
 Open in Xcode:
   open ~/Desktop/memoryOraclePatient/evo/evo.xcodeproj
 
-In Xcode (2 GUI clicks):
-  1. Target "evo" → Info tab → click + to add row:
-     - "Application Transport Security Settings"  (this is the friendly
-        name for NSAppTransportSecurity; Xcode auto-completes)
-     - Set type: Dictionary
-     - Inside it, click + to add child:
-        - "Allow Arbitrary Loads" → Boolean → YES
-        (This permits HTTP to http://192.168.100.5:8080 for the demo.
-         Remove + delete this row entirely when moving to verum.sh HTTPS.)
-
+In Xcode (zero GUI clicks for ATS — it's now baked into Info.plist):
+  1. ⇧⌘K  (Clean Build Folder — important, the prior build has stale Info.plist)
   2. Top device picker → "Ramene's iPhone"
   3. ⌘R
 
