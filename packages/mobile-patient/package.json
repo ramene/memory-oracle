@@ -16,6 +16,8 @@
     "expo-status-bar": "~3.0.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-qrcode-svg": "^6.3.15",
+    "react-native-svg": "~16.0.0",
     "se-age": "file:./modules/se-age"
   },
   "private": true
