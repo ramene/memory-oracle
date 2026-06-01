@@ -41,6 +41,19 @@ export interface SeAgeNative {
   ): Promise<Uint8Array>;
 
   /**
+   * Encrypts `plaintext` to a single `age1se1...` recipient. Returns a
+   * valid age v1 file. Does NOT fire Face ID — encryption only needs
+   * the recipient's public key (no SE access required).
+   *
+   * Used by the patient app at consent-approval time to wrap a session
+   * key TO the clinician's recipient. Single-chunk only (≤64KB) for now.
+   */
+  encryptToRecipient(
+    plaintext: Uint8Array,
+    recipient: string,
+  ): Promise<Uint8Array>;
+
+  /**
    * Decrypts an age file (`age-encryption.org/v1` format) addressed to
    * this device's SE-bound identity. Fires Face ID once per matching
    * `piv-p256` stanza (typically once — patient records have a single

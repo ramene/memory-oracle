@@ -98,6 +98,15 @@ enum SeAgeService {
     }
   }
 
+  /// Encrypts `plaintext` to `recipient` (an age1se1... string).
+  /// Does NOT touch the Secure Enclave — encryption only needs the
+  /// recipient's public key + an ephemeral keypair. No Face ID fires.
+  /// Used by the patient app at step ⑤ to wrap a session key to the
+  /// clinician's recipient.
+  static func encryptToRecipient(plaintext: Data, recipient: String) throws -> Data {
+    return try AgeEncryptor.encryptToRecipient(plaintext: plaintext, recipient: recipient)
+  }
+
   /// Returns the device's own compressed P-256 public key bytes for `tag`,
   /// or nil if the identity hasn't been generated yet.
   static func ownCompressedPub(tag: String) throws -> Data? {

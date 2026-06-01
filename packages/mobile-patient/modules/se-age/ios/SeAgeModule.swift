@@ -37,6 +37,17 @@ public class SeAgeModule: Module {
       }
     }
 
+    AsyncFunction("encryptToRecipient") {
+      (plaintext: Data, recipient: String, promise: Promise) in
+      do {
+        let ciphertext = try SeAgeService.encryptToRecipient(
+          plaintext: plaintext, recipient: recipient)
+        promise.resolve(ciphertext)
+      } catch {
+        promise.reject(SeAgeJsError.from(error))
+      }
+    }
+
     AsyncFunction("decryptAgeFile") {
       (tag: String, ageBytes: Data, reason: String, promise: Promise) in
       do {

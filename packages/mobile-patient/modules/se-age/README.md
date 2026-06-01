@@ -39,6 +39,22 @@ One spec-correctness bug caught + fixed before iPhone deploy: header HMAC
 byte range originally included the trailing space after `---`; age spec
 excludes it. Test would have failed on iPhone with cryptic mismatch error.
 
+### 3c-ii status (2026-05-31)
+
+`AgeEncryptor.swift` + `SeAgeService.encryptToRecipient` + JS bridge
+shipped. Mirror of 3c-i for the patient's wrap-session-key-to-clinician
+flow. Encryption does NOT touch the Secure Enclave (only public-key
+operations + ephemeral keypair); no Face ID fires.
+
+Mac-validated via [`validation/test-3c-ii-encrypt.sh`](./validation/test-3c-ii-encrypt.sh):
+- **Test A**: our-encrypt → our-decrypt round-trips byte-identical for
+  a non-SE keypair (fully automated, no Touch ID)
+- **Test B**: produces a real age file targeting the Sequoia macOS verum
+  `--se` recipient → preserved as
+  [`validation/3c-ii-to-sequoia-wire-compat.age`](./validation/3c-ii-to-sequoia-wire-compat.age).
+  Operator decrypts at Sequoia console (`age -d -i ~/verum-se-test/verum-se-identity.txt …`)
+  to prove iPhone-side encrypt is wire-compatible with the macOS plugin.
+
 Resequenced 3c plan: [`.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md`](../../../../.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md)
 
 ## Surface
