@@ -13,9 +13,33 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
-          "_comment": "Demo-only: allow HTTP to the local relay (e.g. http://192.168.x.x:8080). Production would scope to a specific cleartext exception domain or move the relay behind HTTPS."
+          "_comment": "Demo-only: allow HTTP to the local relay (e.g. http://192.168.x.x:8080). For production at verum.sh/mae.sh: REMOVE this entire NSAppTransportSecurity block — HTTPS handles itself, and ATS is enabled by default."
         }
-      }
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["0A2A.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          }
+        ]
+      },
+      "_privacyManifests_comment": "Apple requires PrivacyInfo.xcprivacy for App Store submission. We declare ZERO data collection and ZERO tracking — the relay only sees opaque age-encrypted blobs (not 'collected' per Apple's definition; see App Store Connect 'App Privacy' section). The four NSPrivacyAccessedAPITypes are standard Required-Reasons API declarations for Expo SDK's typical usage; reason codes per https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api . Expo SDK 54+ reads this block during `npx expo prebuild` and emits the actual ios/<App>/PrivacyInfo.xcprivacy file."
     },
     "extra": {
       "relayBaseUrl": "http://192.168.1.42:8080",

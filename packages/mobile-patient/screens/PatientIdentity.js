@@ -1,17 +1,35 @@
 // Main patient screen: QR with own recipient + relay URL, plus a list
 // of pending encounter requests. Tap a request → ConsentScreen.
 
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { usePendingRequests } from '../hooks/usePendingRequests.js';
 import { getRelayBaseUrl } from '../lib/relay.js';
+import { simulateClinicianRequest } from '../lib/debugSimulator.js';
 
 export default function PatientIdentityScreen({ recipient, onSelectRequest, onOpenAudit }) {
   const relayBaseUrl = getRelayBaseUrl();
   const qrPayload = JSON.stringify({ v: 1, recipient, relay: relayBaseUrl });
 
   const { requests, loading, error, relayReachable, refetch } = usePendingRequests(recipient);
+  const [simulating, setSimulating] = useState(false);
+
+  async function handleSimulate() {
+    setSimulating(true);
+    try {
+      const id = await simulateClinicianRequest(recipient);
+      Alert.alert(
+        'Simulated request sent',
+        `Encounter ${id.slice(0, 8)}… posted to relay.\n\nIt will appear in Pending Requests within ~5 seconds.`,
+      );
+      refetch();
+    } catch (e) {
+      Alert.alert('Simulation failed', e?.message ?? String(e));
+    } finally {
+      setSimulating(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -74,6 +92,27 @@ export default function PatientIdentityScreen({ recipient, onSelectRequest, onOp
       <TouchableOpacity style={styles.auditLink} onPress={onOpenAudit}>
         <Text style={styles.auditLinkText}>View audit log →</Text>
       </TouchableOpacity>
+
+      <View style={styles.reviewerBox}>
+        <Text style={styles.reviewerLabel}>🧪 Reviewer / demo mode</Text>
+        <Text style={styles.reviewerBody}>
+          Don't have a clinician device? Tap below to post a fake
+          EncounterRequest to the relay so you can exercise the consent flow.
+          The fake clinician recipient is a valid public key but has no
+          corresponding private key in the wild — wrappedKeys are not
+          decryptable, but the patient-side UI works exactly as in
+          production.
+        </Text>
+        <TouchableOpacity
+          style={[styles.reviewerBtn, simulating && styles.btnDisabled]}
+          onPress={handleSimulate}
+          disabled={simulating}
+        >
+          <Text style={styles.reviewerBtnText}>
+            {simulating ? 'Simulating…' : 'Simulate clinician request'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -137,4 +176,23 @@ const styles = StyleSheet.create({
   requestTtl: { fontSize: 12, color: '#886', marginTop: 6 },
   auditLink: { padding: 14, alignItems: 'center', marginTop: 16 },
   auditLinkText: { color: '#0066cc', fontSize: 14 },
+  reviewerBox: {
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: '#f7f4ff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d8cde8',
+    borderStyle: 'dashed',
+  },
+  reviewerLabel: { fontSize: 13, fontWeight: '700', color: '#553', marginBottom: 6 },
+  reviewerBody: { fontSize: 12, lineHeight: 17, color: '#665', marginBottom: 12 },
+  reviewerBtn: {
+    backgroundColor: '#8a6ec4',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  reviewerBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  btnDisabled: { opacity: 0.5 },
 });
