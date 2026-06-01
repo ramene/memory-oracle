@@ -42,7 +42,7 @@
       "_privacyManifests_comment": "Apple requires PrivacyInfo.xcprivacy for App Store submission. We declare ZERO data collection and ZERO tracking — the relay only sees opaque age-encrypted blobs (not 'collected' per Apple's definition; see App Store Connect 'App Privacy' section). The four NSPrivacyAccessedAPITypes are standard Required-Reasons API declarations for Expo SDK's typical usage; reason codes per https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api . Expo SDK 54+ reads this block during `npx expo prebuild` and emits the actual ios/<App>/PrivacyInfo.xcprivacy file."
     },
     "extra": {
-      "relayBaseUrl": "http://192.168.1.42:8080",
+      "relayBaseUrl": "http://192.168.100.5:8080",
       "_relayBaseUrl_comment": "Override at runtime via EXPO_PUBLIC_RELAY_URL env var. Default is a placeholder LAN IP — set to the actual Sequoia local IP before building for the demo."
     },
     "android": {
