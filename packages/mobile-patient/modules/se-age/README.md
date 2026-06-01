@@ -8,17 +8,25 @@
 
 ## Phase 3b status
 
-Code-complete in this commit; hardware test pending.
+**3b-i: VALIDATED on real iPhone (iPhone 12, iOS 26.x, 2026-05-31).**
+See [`validation/VALIDATION-3b-i.md`](./validation/VALIDATION-3b-i.md)
+for the full record, screenshots, and the
+[`3b-i-wire-compat-proof.age`](./validation/3b-i-wire-compat-proof.age)
+artifact.
 
 | Surface | Status |
 |---|---|
 | Swift impl (SeAgeModule, SeAgeService, AgeRecipient, Bech32) | ✓ |
 | TS bridge | ✓ |
-| Expo native module wiring (expo-module.config.json + podspec) | ✓ |
-| Unit-test of Bech32 against age-plugin-se output | ✗ (3b validation) |
-| `npx expo prebuild` smoke test | ✗ (operator runs on iPhone) |
-| `npx expo run:ios` build on real device | ✗ (operator runs on iPhone) |
-| End-to-end ECDH against a verum `--se` recipient | ✗ (operator runs) |
+| Expo native module wiring (expo-module.config.json + podspec) | ✓ code-complete; 3b-ii will validate via prebuild |
+| Bech32 cross-validation against age-plugin-se output | ✓ byte-identical roundtrip on macOS |
+| Swift typecheck + parse on macOS | ✓ |
+| Standalone SwiftUI harness on real iPhone | ✓ 3b-i |
+| SE key generation on real iPhone | ✓ 3b-i (IMG_8463 + decoded 33B 0x02-prefixed P-256 pub) |
+| Face ID prompt fires + ECDH returns shared secret | ✓ 3b-i (IMG_8464 + IMG_8465) |
+| Cross-device wire compat: Mac age encrypts to iPhone recipient | ✓ 3b-i (276-byte `piv-p256` stanza in validation/) |
+| `npx expo prebuild` + Expo native module link | ⏳ 3b-ii (after 3c protocol work) |
+| Decrypt an age stanza on iPhone (Face ID-gated) | ⏳ 3c (AgeStanzaParser.swift + HKDF + ChaCha20-Poly1305 unwrap) |
 
 ## Surface
 

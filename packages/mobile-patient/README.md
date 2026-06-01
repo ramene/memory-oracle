@@ -6,10 +6,13 @@
 > [`verum add-age-recipient --se`](https://github.com/ramene/verum) on the
 > clinician's Mac.
 >
-> **Status:** 3b — Secure Enclave + Face ID wired via the local
-> [`se-age`](./modules/se-age/) native module. Code-complete; on-device
-> validation pending. Tracking plan:
-> `.claude/plans/verum-phase-3-ios-faceid-dual-device-20260531.md`.
+> **Status:** 3b-i **VALIDATED on iPhone 12 (2026-05-31)** — Secure
+> Enclave key gen, Face ID-gated ECDH, and `age-plugin-se` wire
+> compatibility all proven end-to-end via the local
+> [`se-age`](./modules/se-age/) native module. See
+> [`modules/se-age/validation/VALIDATION-3b-i.md`](./modules/se-age/validation/VALIDATION-3b-i.md).
+> Next: 3c (encounter handshake + relay + iPhone-side age stanza decrypt).
+> Plan: `.claude/plans/verum-phase-3-ios-faceid-dual-device-20260531.md`.
 
 ## What this app will do (3a + 3b + 3c)
 
