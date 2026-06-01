@@ -159,6 +159,8 @@ cat > "$INFOPLIST" <<'PLISTEOF'
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the encounter relay on your local network so a clinician can request access to your memory namespace. The relay only sees opaque encrypted blobs — never plaintext records.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
