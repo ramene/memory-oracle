@@ -55,7 +55,9 @@ Mac-validated via [`validation/test-3c-ii-encrypt.sh`](./validation/test-3c-ii-e
   Operator decrypts at Sequoia console (`age -d -i ~/verum-se-test/verum-se-identity.txt …`)
   to prove iPhone-side encrypt is wire-compatible with the macOS plugin.
 
-Resequenced 3c plan: [`.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md`](../../../../.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md)
+Plans:
+- Parent: [`docs/plans/verum-phase-3-ios-faceid-dual-device-20260531.md`](../../../../docs/plans/verum-phase-3-ios-faceid-dual-device-20260531.md)
+- Resequenced 3c: [`docs/plans/verum-phase-3c-five-substep-resequence-20260531.md`](../../../../docs/plans/verum-phase-3c-five-substep-resequence-20260531.md)
 
 ## Surface
 
