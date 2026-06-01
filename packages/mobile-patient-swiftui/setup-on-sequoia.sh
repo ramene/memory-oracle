@@ -43,9 +43,15 @@ rm -f "$PROJ_DIR/ContentView.swift"
 # Remove any leftover .git from the seAgeTest skeleton (it'll have evoTest's git).
 rm -rf "$DEST/evo/.git"
 
-# ── 2. Drop in the 4 reused Swift libs (from se-age module) ──────────────
-echo "── [2] drop 4 reused libs ──"
-for f in SeAgeService.swift AgeRecipient.swift Bech32.swift AgeEncryptor.swift; do
+# ── 2. Drop in the 6 reused Swift libs (from se-age module) ──────────────
+# Patient app only ENCRYPTS, but AgeEncryptor's symbols depend on helpers
+# living in AgeCrypto.swift (pivP256WrapKey, payloadKey) and AgeFile.swift
+# (base64EncodeUnpadded). Without those two, the build fails with "Cannot
+# find 'AgeCrypto' in scope" + "Cannot find 'base64EncodeUnpadded' in scope".
+# Including all 6 — AgeCrypto + AgeFile are dead code on the patient side
+# but resolve AgeEncryptor's link dependencies.
+echo "── [2] drop 6 reused libs ──"
+for f in SeAgeService.swift AgeRecipient.swift Bech32.swift AgeEncryptor.swift AgeCrypto.swift AgeFile.swift; do
   cp "$SE_AGE_SRC/$f" "$PROJ_DIR/$f"
   echo "    ✓ $f"
 done
