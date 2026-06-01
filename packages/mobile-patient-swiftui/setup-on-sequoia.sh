@@ -66,15 +66,21 @@ echo "── [4] patch pbxproj ──"
 sed -i '' 's|PRODUCT_BUNDLE_IDENTIFIER = haus\.noodles\.seAgeTest;|PRODUCT_BUNDLE_IDENTIFIER = ai.memoryoracle.patient;|g' "$PBXPROJ"
 
 # Replace the 3b-i Face ID usage description with our patient-app version.
-# Uses awk to do a multi-pattern replace (sed gets messy with semicolons in the replacement).
-python3 <<'PYEOF' "$PBXPROJ"
-import re, sys
-path = sys.argv[1]
-with open(path) as f: content = f.read()
+# Pass the pbxproj path via env var, NOT via positional arg: `python3 <<EOF "$VAR"`
+# makes Python treat $VAR as SCRIPT_PATH and try to execute it as Python (which
+# fails on the pbxproj's "DEVELOPMENT_TEAM = 27TUX5PYAU;" — leading digit
+# triggers "invalid decimal literal"). Env-var pattern avoids that footgun.
+PBXPROJ_PATH="$PBXPROJ" python3 <<'PYEOF'
+import re, os
+path = os.environ['PBXPROJ_PATH']
+with open(path) as f:
+    content = f.read()
 old_pattern = r'INFOPLIST_KEY_NSFaceIDUsageDescription = "[^"]*";'
-new_value   = 'INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID approves a clinician request to access your memory namespace for a single encounter. Your private key never leaves this device\'s Secure Enclave; Face ID only releases a time-limited wrapped key to the clinician.";'
+new_value = '''INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID approves a clinician request to access your memory namespace for a single encounter. Your private key never leaves this device's Secure Enclave; Face ID only releases a time-limited wrapped key to the clinician.";'''
 content = re.sub(old_pattern, new_value, content)
-with open(path, 'w') as f: f.write(content)
+with open(path, 'w') as f:
+    f.write(content)
+print("    ✓ Face ID usage description updated")
 PYEOF
 
 echo "── pbxproj state after patch ──"
