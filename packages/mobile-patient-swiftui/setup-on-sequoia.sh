@@ -98,8 +98,15 @@ grep -E 'PRODUCT_BUNDLE_IDENTIFIER|INFOPLIST_KEY_NSFaceIDUsageDescription|DEVELO
 # instead. Synthesis can't express complex dict values (NSAppTransportSecurity
 # is a dict, not a string), so we must turn synthesis OFF and provide a
 # complete Info.plist that reproduces the keys synthesis was supplying.
+#
+# CRITICAL placement: Info.plist must live OUTSIDE the FilesystemSynchronized-
+# RootGroup source dir (evo/evo/). If placed inside, Xcode 16+ auto-adds it
+# to Copy Bundle Resources, AND the dedicated Process Info.plist step runs
+# too — both target the same output path → "Multiple commands produce
+# .../Info.plist" build error. Putting it as a sibling of evo.xcodeproj
+# keeps it out of the auto-sync dir.
 echo "── [5] write complete Info.plist (includes ATS for the LAN-IP demo) ──"
-INFOPLIST="$PROJ_DIR/Info.plist"
+INFOPLIST="$DEST/evo/Info.plist"   # ← parent of $PROJ_DIR; sibling of evo.xcodeproj
 cat > "$INFOPLIST" <<'PLISTEOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -175,7 +182,7 @@ with open(path) as f:
     content = f.read()
 new_content, n = re.subn(
     r'(GENERATE_INFOPLIST_FILE = NO;)\n(\s*)(?!INFOPLIST_FILE)',
-    r'\1\n\2INFOPLIST_FILE = "evo/Info.plist";\n\2',
+    r'\1\n\2INFOPLIST_FILE = "Info.plist";\n\2',
     content
 )
 with open(path, 'w') as f:
