@@ -5,6 +5,8 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "_newArchEnabled_comment": "Expo SDK 54 enables React Native New Architecture (Fabric) by default. react-native-svg 15.11.2 (the SDK 54 canonical pin per `npx expo install --fix`) has a Fabric path that does NOT compile against RN 0.81's renamed C++ types (BaseShadowNode, getConcreteProps, getLayoutMetrics). For the demo we don't need Fabric — disabling reverts to the legacy Paper renderer, where 15.11.2's Old Architecture path is clean. The se-age native module uses ExpoModulesCore which is architecture-agnostic, so SE/Face ID still work. For production: upgrade react-native-svg to a version with working Fabric for RN 0.81, then re-enable.",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ai.memoryoracle.patient",
