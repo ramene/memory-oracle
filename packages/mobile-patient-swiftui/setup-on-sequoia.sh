@@ -159,11 +159,30 @@ cat > "$INFOPLIST" <<'PLISTEOF'
 PLISTEOF
 echo "    ✓ Info.plist written ($(wc -l < "$INFOPLIST" | tr -d ' ') lines)"
 
-# ── 6. Turn off GENERATE_INFOPLIST_FILE in pbxproj ───────────────────────
-echo "── [6] disable GENERATE_INFOPLIST_FILE in pbxproj ──"
+# ── 6. Turn off GENERATE_INFOPLIST_FILE + add INFOPLIST_FILE in pbxproj ──
+# Both settings must change together. Setting GENERATE_INFOPLIST_FILE = NO
+# without INFOPLIST_FILE leaves Xcode with no Info.plist location → build
+# fails with "missing Info.plist". seAgeTest skeleton doesn't have
+# INFOPLIST_FILE in pbxproj (it relied on synthesis), so we add it.
+echo "── [6] disable GENERATE_INFOPLIST_FILE + add INFOPLIST_FILE in pbxproj ──"
 sed -i '' 's|GENERATE_INFOPLIST_FILE = YES;|GENERATE_INFOPLIST_FILE = NO;|g' "$PBXPROJ"
-grep GENERATE_INFOPLIST_FILE "$PBXPROJ" | sort -u | sed 's/^/    /'
-grep '^[[:space:]]*INFOPLIST_FILE' "$PBXPROJ" | sort -u | sed 's/^/    /'
+# Python for safe multi-line insertion with idempotency (negative lookahead
+# prevents double-insertion if INFOPLIST_FILE already follows).
+PBXPROJ_PATH="$PBXPROJ" python3 <<'PYEOF'
+import os, re
+path = os.environ['PBXPROJ_PATH']
+with open(path) as f:
+    content = f.read()
+new_content, n = re.subn(
+    r'(GENERATE_INFOPLIST_FILE = NO;)\n(\s*)(?!INFOPLIST_FILE)',
+    r'\1\n\2INFOPLIST_FILE = "evo/Info.plist";\n\2',
+    content
+)
+with open(path, 'w') as f:
+    f.write(new_content)
+print(f"    ✓ added INFOPLIST_FILE to {n} build config block(s)")
+PYEOF
+grep -E 'GENERATE_INFOPLIST_FILE|INFOPLIST_FILE' "$PBXPROJ" | sort -u | sed 's/^/    /'
 
 # ── 7. Done — give the operator the next step ────────────────────────────
 cat <<EOF
