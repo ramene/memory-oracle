@@ -41,6 +41,26 @@ export interface SeAgeNative {
   ): Promise<Uint8Array>;
 
   /**
+   * Decrypts an age file (`age-encryption.org/v1` format) addressed to
+   * this device's SE-bound identity. Fires Face ID once per matching
+   * `piv-p256` stanza (typically once — patient records have a single
+   * recipient).
+   *
+   * Returns the recovered plaintext. Throws:
+   *   - `SeAgeUserCancelled` if Face ID is dismissed
+   *   - `SeAgeInvalidRecipient` if no piv-p256 stanza matches this identity
+   *   - `SeAgeKeyAgreement` for any other decryption failure
+   *
+   * 3c-i ships single-chunk decryption (≤64KB plaintext). Multi-chunk
+   * lands when patient records grow.
+   */
+  decryptAgeFile(
+    tag: string,
+    ageBytes: Uint8Array,
+    reason: string,
+  ): Promise<Uint8Array>;
+
+  /**
    * Deletes the key associated with `tag` (both the Secure Enclave
    * reference and the keychain-persisted dataRepresentation token).
    * Use during patient logout / account reset.

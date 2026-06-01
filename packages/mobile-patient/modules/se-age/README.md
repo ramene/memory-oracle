@@ -26,7 +26,20 @@ artifact.
 | Face ID prompt fires + ECDH returns shared secret | ✓ 3b-i (IMG_8464 + IMG_8465) |
 | Cross-device wire compat: Mac age encrypts to iPhone recipient | ✓ 3b-i (276-byte `piv-p256` stanza in validation/) |
 | `npx expo prebuild` + Expo native module link | ⏳ 3b-ii (after 3c protocol work) |
-| Decrypt an age stanza on iPhone (Face ID-gated) | ⏳ 3c (AgeStanzaParser.swift + HKDF + ChaCha20-Poly1305 unwrap) |
+| Decrypt an age stanza on iPhone (Face ID-gated) | ✓ 3c-i Mac-validated; iPhone validation in 3c-v |
+
+### 3c-i status (2026-05-31)
+
+`AgeFile.swift` (age v1 parser) + `AgeCrypto.swift` (CryptoKit HKDF +
+ChaChaPoly + HMAC helpers) + `SeAgeService.decryptAgeFile` shipped.
+Mac round-trip validated end-to-end against the real `age` + `age-plugin-se`
+binaries — reproducible via [`validation/test-3c-i-decrypt.sh`](./validation/test-3c-i-decrypt.sh).
+
+One spec-correctness bug caught + fixed before iPhone deploy: header HMAC
+byte range originally included the trailing space after `---`; age spec
+excludes it. Test would have failed on iPhone with cryptic mismatch error.
+
+Resequenced 3c plan: [`.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md`](../../../../.claude/plans/verum-phase-3c-five-substep-resequence-20260531.md)
 
 ## Surface
 

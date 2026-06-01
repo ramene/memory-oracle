@@ -37,6 +37,17 @@ public class SeAgeModule: Module {
       }
     }
 
+    AsyncFunction("decryptAgeFile") {
+      (tag: String, ageBytes: Data, reason: String, promise: Promise) in
+      do {
+        let plaintext = try SeAgeService.decryptAgeFile(
+          tag: tag, ageBytes: ageBytes, reason: reason)
+        promise.resolve(plaintext)
+      } catch {
+        promise.reject(SeAgeJsError.from(error))
+      }
+    }
+
     AsyncFunction("deleteIdentity") { (tag: String, promise: Promise) in
       do {
         let ok = try SeAgeService.deleteIdentity(tag: tag)
