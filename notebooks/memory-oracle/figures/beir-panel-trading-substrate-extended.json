@@ -1,0 +1,843 @@
+{
+  "corpus": "trading-substrate-extended",
+  "n_queries": 27,
+  "n_canonical_docs": 9,
+  "n_amendments": 9,
+  "paths": {
+    "bm25": {
+      "ndcg_at_10": 0.8705,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.4444,
+      "mrr_amendment": 0.7222,
+      "n_queries": 27
+    },
+    "dense": {
+      "ndcg_at_10": 0.8561,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.4074,
+      "mrr_amendment": 0.6864,
+      "n_queries": 27
+    },
+    "ebr": {
+      "ndcg_at_10": 0.9815,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.963,
+      "mrr_amendment": 0.9753,
+      "n_queries": 27
+    }
+  },
+  "queries": [
+    {
+      "q": "current MONITOR cascade structure with Haiku tier ordering",
+      "scope": "strategy_brain_cascade",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_brain_cascade"
+        }
+      }
+    },
+    {
+      "q": "does MONITOR still call api.anthropic.com directly for the T4 fallback",
+      "scope": "strategy_brain_cascade",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_brain_cascade"
+        }
+      }
+    },
+    {
+      "q": "what is the COACH 5-tier brain cascade structure today",
+      "scope": "strategy_brain_cascade",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_brain_cascade"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_brain_cascade"
+        }
+      }
+    },
+    {
+      "q": "current minAletheiaWeight floor for chop-day entries",
+      "scope": "strategy_chopday_aletheia_weight",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "dense": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        }
+      }
+    },
+    {
+      "q": "what Aletheia weight floor applies to kucoin-scanner chop-day signals now",
+      "scope": "strategy_chopday_aletheia_weight",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        }
+      }
+    },
+    {
+      "q": "is the chop-day minAletheiaWeight still 0.55",
+      "scope": "strategy_chopday_aletheia_weight",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "dense": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_aletheia_weight"
+        }
+      }
+    },
+    {
+      "q": "current minSignalConfidence floor for APE and ENJ on chop-day",
+      "scope": "strategy_chopday_signal_confidence_floor",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        }
+      }
+    },
+    {
+      "q": "what signal confidence floor applies to ENJ-USDT chop-day mean reversion",
+      "scope": "strategy_chopday_signal_confidence_floor",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        }
+      }
+    },
+    {
+      "q": "is the chop-day minSignalConfidence still 0.72 for all pairs",
+      "scope": "strategy_chopday_signal_confidence_floor",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_chopday_signal_confidence_floor"
+        }
+      }
+    },
+    {
+      "q": "is there a central gate registry in the orchestrator",
+      "scope": "strategy_gate_registry",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_gate_registry"
+        }
+      }
+    },
+    {
+      "q": "what gates are registered in the Phase 0.2.5 gate registry",
+      "scope": "strategy_gate_registry",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_gate_registry"
+        }
+      }
+    },
+    {
+      "q": "current architecture for gate composition tracing",
+      "scope": "strategy_gate_registry",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_gate_registry"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_gate_registry"
+        }
+      }
+    },
+    {
+      "q": "does the KC bearish blocker still reject mean-reversion long entries",
+      "scope": "strategy_mean_rev_kc_bearish_exemption",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        }
+      }
+    },
+    {
+      "q": "current exemption for MEAN-REV-LONG dip buys on KuCoin bearish regime",
+      "scope": "strategy_mean_rev_kc_bearish_exemption",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        }
+      }
+    },
+    {
+      "q": "what agents are exempt from kc-bearish-regime-blocker",
+      "scope": "strategy_mean_rev_kc_bearish_exemption",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_mean_rev_kc_bearish_exemption"
+        }
+      }
+    },
+    {
+      "q": "current funding rate gating thresholds for perpetual short positions",
+      "scope": "strategy_perp_funding_threshold",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_perp_funding_threshold"
+        }
+      }
+    },
+    {
+      "q": "what funding rate triggers the close-all-shorts circuit breaker now",
+      "scope": "strategy_perp_funding_threshold",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_perp_funding_threshold"
+        }
+      }
+    },
+    {
+      "q": "max leverage by regime for Binance Futures perps today",
+      "scope": "strategy_perp_funding_threshold",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_perp_funding_threshold"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_perp_funding_threshold"
+        }
+      }
+    },
+    {
+      "q": "current value of the session confidence multiplier per regime",
+      "scope": "strategy_session_multiplier",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_session_multiplier"
+        }
+      }
+    },
+    {
+      "q": "what session multiplier applies to news-day cycles now",
+      "scope": "strategy_session_multiplier",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_session_multiplier"
+        }
+      }
+    },
+    {
+      "q": "is MAE_SESSION_CONF_MULT still hardcoded at 1.15",
+      "scope": "strategy_session_multiplier",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_session_multiplier"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_session_multiplier"
+        }
+      }
+    },
+    {
+      "q": "is shorting authorized for the operator account today",
+      "scope": "strategy_shorting_kucoin_spot",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9328,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        },
+        "dense": {
+          "ndcg_at_10": 0.595,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.2,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        }
+      }
+    },
+    {
+      "q": "current rule for opening short positions on Binance Futures",
+      "scope": "strategy_shorting_kucoin_spot",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9328,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        },
+        "dense": {
+          "ndcg_at_10": 0.9328,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_shorting_kucoin_spot"
+        }
+      }
+    },
+    {
+      "q": "what is the active shorting authorization path now",
+      "scope": "strategy_shorting_kucoin_spot",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.5213,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_refactor-history-memory-oracle_file_trading_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 0.5049,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_refactor-history-memory-oracle_file_trading_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 0.5,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_refactor-history-memory-oracle_file_trading_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "is sit-out auto-engage active today after consecutive losses",
+      "scope": "strategy_sitout_auto_engage",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_sitout_auto_engage"
+        }
+      }
+    },
+    {
+      "q": "what flag controls sit-out auto-engage right now",
+      "scope": "strategy_sitout_auto_engage",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_sitout_auto_engage"
+        }
+      }
+    },
+    {
+      "q": "current behavior of sitout.auto_engage with cascading gate rejections",
+      "scope": "strategy_sitout_auto_engage",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "strategy_sitout_auto_engage"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "strategy_sitout_auto_engage"
+        }
+      }
+    }
+  ],
+  "relevance_grading": "amendment=2, merged=2, canonical=1, off-target=0",
+  "k": 10
+}

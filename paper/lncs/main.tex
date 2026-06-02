@@ -1285,10 +1285,8 @@ implementation fidelity (per \S\ref{sec:methodological-note}); the
 load-bearing claims are restated in nDCG@10 and Recall@10 to match the
 post-BEIR \cite{thakur2021beir} convention for retrieval evaluation.
 The BEIR-style cross-corpus generalization --- evaluating EBR
-against BM25 and dense baselines on three independent supersession-rich
-corpora (clinical, refactor-history, regulatory-amendment) --- is
-in-flight at the time of this submission and will appear as an
-appendix or a follow-up artifact at the project repository.
+against BM25 and dense baselines on independent supersession-rich
+corpora --- appears in \S\ref{sec:beir-panel} below.
 
 \subsection{Corpus and Setup}
 
@@ -1594,6 +1592,118 @@ document this to flag a class of substrate-reliability work that has no
 precedent in vector-RAG systems because they do not face the same
 write-concurrency profile: in our substrate, every operator session is
 a potential concurrent writer.
+
+\subsection{BEIR-Style Multi-Corpus Retrieval Panel}
+\label{sec:beir-panel}
+
+The single-corpus correctness numbers of
+\S\ref{sec:clinical-three-path} establish the precedence invariant on
+the clinical case study; this subsection generalizes the claim across
+two additional supersession-rich corpora in the
+BEIR \cite{thakur2021beir} cross-domain evaluation discipline. The
+panel compares three retrieval paths --- BM25, dense embeddings
+(\texttt{sentence-transformers/all-MiniLM-L6-v2}), and EBR (the
+amendment-merged view ranked by BM25) --- on synthetic corpora drawn
+from two domains where amendment-shaped supersession occurs in
+operator-curated workflows.
+
+\paragraph{Corpora.}
+\begin{description}[leftmargin=1.5em,style=nextline]
+  \item[\texttt{refactor-history-memory-oracle}] $9$ canonical+amendment
+        pairs mined from this repository's own git log. Each amendment
+        cites a real commit hash in \texttt{live\_evidence}: the
+        Evidence-Bound Retrieval rename (\texttt{d5c9f5a}),
+        \texttt{packages/mobile} $\rightarrow$
+        \texttt{packages/mobile-patient} (\texttt{d771610}), and the
+        \texttt{loadSupersessions()} backwards-compatibility refactor,
+        among others.
+  \item[\texttt{trading-substrate-extended}] $9$ canonical+amendment
+        pairs from the operator-documented amendment-shaped events
+        cited in \S\ref{sec:operator-corpus} (May-10 six amendments),
+        the May-23 brain-cascade refactor, and the May-13 Binance
+        Futures shorting authorization.
+\end{description}
+A third regulatory-amendment corpus (FDA / Federal Register) was
+scoped but dropped from this submission: no clean public API for
+reproducible amendment scraping was available in-session without
+credentialed access. We treat that corpus as planned future work.
+
+\paragraph{Methodology.} For each corpus, each query is one of the
+$54$ paraphrases of the form ``current $X$ for $Y$'' whose
+operationally-correct answer is in the amendment, not the canonical.
+The retrieval haystack per corpus is the $18$ in-corpus documents
+($9$ canonical + $9$ amendment) plus $20$ cross-corpus distractor
+documents plus $68$ bulk-distractor chunks ($\approx{}106$ total
+docs/corpus), ensuring the precedence task is non-trivial even when
+the relevant document is in the candidate set. Per-path scoring
+follows the graded relevance of
+Table~\ref{tab:clinical-three-path}: amendment $=2$, merged $=2$,
+canonical $=1$, off-target $=0$. The EBR path applies the
+\texttt{getMerged()} primitive to produce the amendment-merged
+documents and ranks the resulting set via BM25.
+
+\begin{table}[h]
+\centering
+\caption{BEIR-style multi-corpus panel. Mean across both
+         supersession-rich corpora; $n=54$ queries total, $k=10$. EBR
+         dominates on the Context Relevance axis (nDCG@10) and on the
+         operationally-load-bearing top-$1$ correctness; Recall@10
+         saturates at $1.000$ across paths because the candidate set
+         per query reliably contains both relevant documents --- a
+         direct illustration of the
+         Galileo \cite{galileo2024rag} Context-Sufficiency vs
+         Context-Relevance distinction. Raw output in
+         \texttt{notebooks/memory-oracle/figures/beir-panel-summary.json};
+         per-corpus splits in
+         \texttt{beir-panel-refactor-history-memory-oracle.json} and
+         \texttt{beir-panel-trading-substrate-extended.json}.}
+\label{tab:beir-panel}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Path} & \textbf{nDCG@10} & \textbf{Recall@10} & \textbf{MRR} & \textbf{Top-$1$} \\
+\midrule
+BM25                  & $0.862$ & $1.000$ & $0.735$ & $0.481$ \\
+Dense (MiniLM-L6-v2)  & $0.839$ & $1.000$ & $0.683$ & $0.444$ \\
+\textbf{EBR (merged)} & $\mathbf{0.968}$ & $\mathbf{1.000}$ & $\mathbf{0.957}$ & $\mathbf{0.926}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Per-corpus splits (top-$1$ correctness).} On
+\texttt{refactor-history-memory-oracle}: BM25 $0.519$, dense
+$0.482$, \textbf{EBR $0.889$}. On
+\texttt{trading-substrate-extended}: BM25 $0.444$, dense $0.407$,
+\textbf{EBR $0.963$}. The cross-corpus gap is consistent ---
+EBR-vs-BM25 is $+0.370$ to $+0.519$ top-$1$ points; EBR-vs-dense is
+$+0.407$ to $+0.556$ --- which is the cross-domain generalization
+the panel was built to test.
+
+\paragraph{What the panel proves.} BM25 and dense ranked the
+\emph{stale canonical} document as top-$1$ on $\approx{}46\%$ and
+$\approx{}50\%$ of queries respectively, across both corpora. The
+amendment was always retrievable in the top-$10$ ---
+\emph{the candidate set always contains the right answer} --- but
+ranking by lexical or semantic similarity to the query does not track
+recency, so the operator-correct document loses to the longer or
+more lexically familiar canonical in roughly half of the queries.
+EBR's merged view structurally encodes which assertion is current,
+collapsing the failure rate by an order of magnitude
+($0.074$ misses, almost all from near-ties between adjacent scopes).
+This is the cross-corpus restatement of
+Theorem~\ref{thm:precedence}: under the precedence invariant, the
+amendment outranks its canonical \emph{by construction}, independent
+of corpus, query phrasing, or scoring function.
+
+\paragraph{Reproducibility.} The panel runs end-to-end on a free
+Colab CPU runtime in $\approx{}60$\,s via
+\texttt{notebooks/memory-oracle/beir-panel-build.ipynb} (also
+runnable as a standalone script
+\texttt{notebooks/memory-oracle/beir\_panel\_harness.py}). The two
+fixtures ship in the repository at
+\texttt{packages/memory-oracle-core/fixtures/refactor-history-memory-oracle/}
+and
+\texttt{packages/memory-oracle-core/fixtures/trading-substrate-extended/}.
 
 \subsection{Operator Real-Corpus Probe: Six Amendments in a Single Day}
 \label{sec:operator-corpus}

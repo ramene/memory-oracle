@@ -1,0 +1,843 @@
+{
+  "corpus": "refactor-history-memory-oracle",
+  "n_queries": 27,
+  "n_canonical_docs": 9,
+  "n_amendments": 9,
+  "paths": {
+    "bm25": {
+      "ndcg_at_10": 0.8537,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.5185,
+      "mrr_amendment": 0.7469,
+      "n_queries": 27
+    },
+    "dense": {
+      "ndcg_at_10": 0.8221,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.4815,
+      "mrr_amendment": 0.6794,
+      "n_queries": 27
+    },
+    "ebr": {
+      "ndcg_at_10": 0.9541,
+      "recall_at_10": 1.0,
+      "top1_correctness": 0.8889,
+      "mrr_amendment": 0.9383,
+      "n_queries": 27
+    }
+  },
+  "queries": [
+    {
+      "q": "where are the RETRIEVAL spec docs located now",
+      "scope": "docs_root_paper_files",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "docs_root_paper_files"
+        },
+        "dense": {
+          "ndcg_at_10": 0.6313,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.25,
+          "top1_kind": "canonical",
+          "top1_scope": "docs_root_paper_files"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "docs_root_paper_files"
+        }
+      }
+    },
+    {
+      "q": "what is the current directory for the paper roadmap document",
+      "scope": "docs_root_paper_files",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.5197,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_BULK_docs/genesis/README.md_chunk0"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "docs_root_paper_files"
+        },
+        "ebr": {
+          "ndcg_at_10": 0.5,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_BULK_docs/genesis/README.md_chunk0"
+        }
+      }
+    },
+    {
+      "q": "where did the genesis paper roadmap and retrieval specs get archived",
+      "scope": "docs_root_paper_files",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "docs_root_paper_files"
+        },
+        "dense": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "docs_root_paper_files"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "docs_root_paper_files"
+        }
+      }
+    },
+    {
+      "q": "what is the current filename of figure F5",
+      "scope": "figure_f5_supersession_view",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "figure_f5_supersession_view"
+        }
+      }
+    },
+    {
+      "q": "what is the new name of F5-supersession-view.png",
+      "scope": "figure_f5_supersession_view",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "figure_f5_supersession_view"
+        }
+      }
+    },
+    {
+      "q": "what figure file replaced F5-supersession-view",
+      "scope": "figure_f5_supersession_view",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "figure_f5_supersession_view"
+        }
+      }
+    },
+    {
+      "q": "what is the current filename for the clinical litmus script",
+      "scope": "file_clinical_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.6885,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "canonical",
+          "top1_scope": "file_clinical_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 0.5869,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.3333,
+          "top1_kind": "distractor",
+          "top1_scope": "DISTRACTOR_BULK_docs/genesis/PAPER-ROADMAP.md_chunk3"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "file_clinical_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what is the new name of the clinical supersession proof shell script",
+      "scope": "file_clinical_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "file_clinical_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "file_clinical_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "file_clinical_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what file replaced clinical-supersession-proof.md",
+      "scope": "file_clinical_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "file_clinical_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "file_clinical_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "file_clinical_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what is the current name for the trading proof shell script",
+      "scope": "file_trading_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "file_trading_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "file_trading_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 0.6309,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "merged",
+          "top1_scope": "file_clinical_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what file replaced trading-supersession-proof.sh",
+      "scope": "file_trading_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "file_trading_supersession_proof"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "file_trading_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "file_trading_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what is the new trading litmus filename after the rename",
+      "scope": "file_trading_supersession_proof",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.6194,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "amendment",
+          "top1_scope": "figure_f5_supersession_view"
+        },
+        "dense": {
+          "ndcg_at_10": 0.9448,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "file_trading_supersession_proof"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "file_trading_supersession_proof"
+        }
+      }
+    },
+    {
+      "q": "what sidecar extensions does loadSupersessions read today",
+      "scope": "function_loadSupersessions",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "function_loadSupersessions"
+        }
+      }
+    },
+    {
+      "q": "what is the current behavior of loadSupersessions for backwards compat",
+      "scope": "function_loadSupersessions",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9639,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "dense": {
+          "ndcg_at_10": 0.8262,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "function_loadSupersessions"
+        }
+      }
+    },
+    {
+      "q": "does memory-merge read .amendments.jsonl or .supersessions.jsonl now",
+      "scope": "function_loadSupersessions",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.6399,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "amendment",
+          "top1_scope": "mechanism_supersession_sidecar"
+        },
+        "dense": {
+          "ndcg_at_10": 0.5296,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.25,
+          "top1_kind": "amendment",
+          "top1_scope": "mechanism_supersession_sidecar"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "function_loadSupersessions"
+        }
+      }
+    },
+    {
+      "q": "what is the current file extension for the amendment sidecar",
+      "scope": "mechanism_supersession_sidecar",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.5213,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "amendment",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "dense": {
+          "ndcg_at_10": 0.6399,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "amendment",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "ebr": {
+          "ndcg_at_10": 0.6309,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "merged",
+          "top1_scope": "function_loadSupersessions"
+        }
+      }
+    },
+    {
+      "q": "what is the new name for the supersession sidecar mechanism",
+      "scope": "mechanism_supersession_sidecar",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "mechanism_supersession_sidecar"
+        },
+        "dense": {
+          "ndcg_at_10": 0.5508,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.1429,
+          "top1_kind": "canonical",
+          "top1_scope": "mechanism_supersession_sidecar"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "mechanism_supersession_sidecar"
+        }
+      }
+    },
+    {
+      "q": "what jsonl extension does the merge primitive prefer today",
+      "scope": "mechanism_supersession_sidecar",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.8262,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "mechanism_supersession_sidecar"
+        },
+        "dense": {
+          "ndcg_at_10": 0.659,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "function_loadSupersessions"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "mechanism_supersession_sidecar"
+        }
+      }
+    },
+    {
+      "q": "where does the video ingestion notebook live now",
+      "scope": "notebook_mae_video_ingestion",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "notebook_mae_video_ingestion"
+        }
+      }
+    },
+    {
+      "q": "what is the current path for the video ingestion qwen notebook",
+      "scope": "notebook_mae_video_ingestion",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "dense": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "notebook_mae_video_ingestion"
+        }
+      }
+    },
+    {
+      "q": "what notebook directory replaced mae-video-ingestion",
+      "scope": "notebook_mae_video_ingestion",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "notebook_mae_video_ingestion"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "notebook_mae_video_ingestion"
+        }
+      }
+    },
+    {
+      "q": "where does the mobile patient package live now",
+      "scope": "package_mobile",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "package_mobile"
+        }
+      }
+    },
+    {
+      "q": "what is the current path for the mobile package after the Phase 3 rename",
+      "scope": "package_mobile",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "package_mobile"
+        }
+      }
+    },
+    {
+      "q": "what is the new npm name for the mobile patient package",
+      "scope": "package_mobile",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "dense": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "package_mobile"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "package_mobile"
+        }
+      }
+    },
+    {
+      "q": "what is the current LNCS paper title",
+      "scope": "paper_title",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "paper_title"
+        },
+        "dense": {
+          "ndcg_at_10": 0.5697,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.1667,
+          "top1_kind": "canonical",
+          "top1_scope": "paper_title"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "paper_title"
+        }
+      }
+    },
+    {
+      "q": "what is the most recent title of the EBR clinical AI paper",
+      "scope": "paper_title",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.9328,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "paper_title"
+        },
+        "dense": {
+          "ndcg_at_10": 0.918,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "amendment",
+          "top1_scope": "paper_title"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "paper_title"
+        }
+      }
+    },
+    {
+      "q": "what title does paper/lncs/main.tex use now",
+      "scope": "paper_title",
+      "results_per_path": {
+        "bm25": {
+          "ndcg_at_10": 0.7967,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.5,
+          "top1_kind": "canonical",
+          "top1_scope": "paper_title"
+        },
+        "dense": {
+          "ndcg_at_10": 0.595,
+          "recall_at_10": 1.0,
+          "top1_correctness": 0.0,
+          "mrr_amendment": 0.2,
+          "top1_kind": "canonical",
+          "top1_scope": "paper_title"
+        },
+        "ebr": {
+          "ndcg_at_10": 1.0,
+          "recall_at_10": 1.0,
+          "top1_correctness": 1.0,
+          "mrr_amendment": 1.0,
+          "top1_kind": "merged",
+          "top1_scope": "paper_title"
+        }
+      }
+    }
+  ],
+  "relevance_grading": "amendment=2, merged=2, canonical=1, off-target=0",
+  "k": 10
+}

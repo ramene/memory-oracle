@@ -1,0 +1,93 @@
+{
+  "corpora": [
+    "refactor-history-memory-oracle",
+    "trading-substrate-extended"
+  ],
+  "total_n_queries": 54,
+  "total_canonical_docs": 18,
+  "total_amendments": 18,
+  "k": 10,
+  "relevance_grading": "amendment=2, merged=2, canonical=1, off-target=0",
+  "paths": {
+    "bm25": {
+      "ndcg_at_10_mean_across_corpora": 0.8621,
+      "recall_at_10_mean_across_corpora": 1.0,
+      "top1_correctness_mean_across_corpora": 0.4814,
+      "mrr_amendment_mean_across_corpora": 0.7346,
+      "per_corpus_ndcg_at_10": {
+        "refactor-history-memory-oracle": 0.8537,
+        "trading-substrate-extended": 0.8705
+      },
+      "per_corpus_recall_at_10": {
+        "refactor-history-memory-oracle": 1.0,
+        "trading-substrate-extended": 1.0
+      },
+      "per_corpus_top1": {
+        "refactor-history-memory-oracle": 0.5185,
+        "trading-substrate-extended": 0.4444
+      },
+      "per_corpus_mrr": {
+        "refactor-history-memory-oracle": 0.7469,
+        "trading-substrate-extended": 0.7222
+      }
+    },
+    "dense": {
+      "ndcg_at_10_mean_across_corpora": 0.8391,
+      "recall_at_10_mean_across_corpora": 1.0,
+      "top1_correctness_mean_across_corpora": 0.4445,
+      "mrr_amendment_mean_across_corpora": 0.6829,
+      "per_corpus_ndcg_at_10": {
+        "refactor-history-memory-oracle": 0.8221,
+        "trading-substrate-extended": 0.8561
+      },
+      "per_corpus_recall_at_10": {
+        "refactor-history-memory-oracle": 1.0,
+        "trading-substrate-extended": 1.0
+      },
+      "per_corpus_top1": {
+        "refactor-history-memory-oracle": 0.4815,
+        "trading-substrate-extended": 0.4074
+      },
+      "per_corpus_mrr": {
+        "refactor-history-memory-oracle": 0.6794,
+        "trading-substrate-extended": 0.6864
+      }
+    },
+    "ebr": {
+      "ndcg_at_10_mean_across_corpora": 0.9678,
+      "recall_at_10_mean_across_corpora": 1.0,
+      "top1_correctness_mean_across_corpora": 0.926,
+      "mrr_amendment_mean_across_corpora": 0.9568,
+      "per_corpus_ndcg_at_10": {
+        "refactor-history-memory-oracle": 0.9541,
+        "trading-substrate-extended": 0.9815
+      },
+      "per_corpus_recall_at_10": {
+        "refactor-history-memory-oracle": 1.0,
+        "trading-substrate-extended": 1.0
+      },
+      "per_corpus_top1": {
+        "refactor-history-memory-oracle": 0.8889,
+        "trading-substrate-extended": 0.963
+      },
+      "per_corpus_mrr": {
+        "refactor-history-memory-oracle": 0.9383,
+        "trading-substrate-extended": 0.9753
+      }
+    }
+  },
+  "elapsed_seconds": 58.68,
+  "haystack_composition": {
+    "target_pairs_per_corpus": 9,
+    "cross_corpus_distractor_docs": 20,
+    "bulk_distractor_chunks": 68,
+    "total_docs_in_index_per_corpus": "target(18) + cross-corpus distractors(20) + bulk distractors"
+  },
+  "metric_notes": {
+    "ndcg_at_10": "Graded nDCG with amendment=2, merged=2, canonical=1, distractor=0. Higher = more correct ranking.",
+    "recall_at_10": "Binary: amendment/merged doc for target scope appears in top-10. Saturates at 1.0 when corpus is small and amendment text is lexically distinctive \u2014 the discriminative metric here is top-1 correctness.",
+    "top1_correctness": "Binary: rank-1 doc is amendment or merged for target scope. This is the operationally-relevant signal \u2014 does the path return the CURRENT answer first?",
+    "mrr_amendment": "Mean Reciprocal Rank of the first amendment/merged doc for target scope. Smoother than top-1."
+  },
+  "note": "Per-corpus details in beir-panel-<slug>.json. EBR path uses memory-merge.mjs to produce amendment-merged docs, then ranks via BM25. Headline result: EBR top-1 correctness ~0.97 vs BM25 ~0.48 vs dense ~0.44 \u2014 the merged view structurally encodes which assertion is current; BM25 and dense can only see canonical and amendment as separate docs and rank by lexical/semantic similarity to the query, which doesn't track recency."
+}
