@@ -2,9 +2,6 @@
 //
 // Default screen: QR encoding patient's identity + relay URL, plus a
 // live list of pending encounter requests. Tap a request → ConsentView.
-// Includes the reviewer-mode "Simulate clinician request" button at
-// the bottom (also exercised during App Store Review when reviewers
-// don't have a clinician device).
 
 import SwiftUI
 import Combine
@@ -16,8 +13,6 @@ struct HomeView: View {
     var onOpenAudit: () -> Void
 
     @StateObject private var poller: PendingRequestsPoller
-    @State private var simulating = false
-    @State private var simulateError: String? = nil
 
     init(patientRecipient: String,
          onSelectRequest: @escaping (EncounterRequest) -> Void,
@@ -67,7 +62,6 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 10)
                 }
-                reviewerBox
             }
             .padding(24)
         }
@@ -190,62 +184,6 @@ struct HomeView: View {
         .background(Color(red: 1.0, green: 0.98, blue: 0.94))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.91, green: 0.78, blue: 0.56), lineWidth: 1))
         .cornerRadius(10)
-    }
-
-    private var reviewerBox: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("🧪 Reviewer / demo mode")
-                .font(.subheadline).fontWeight(.bold)
-                .foregroundColor(Color(red: 0.33, green: 0.33, blue: 0.2))
-            Text("Don't have a clinician device? Tap below to post a fake EncounterRequest to the relay so you can exercise the consent flow. The fake clinician's recipient is a valid public key but has no corresponding private key in the wild — wrappedKeys are not decryptable, but the patient-side UI works exactly as in production.")
-                .font(.caption)
-                .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.33))
-                .fixedSize(horizontal: false, vertical: true)
-            if let e = simulateError {
-                Text(e)
-                    .font(.caption)
-                    .foregroundColor(.red)
-            }
-            Button(action: simulate) {
-                HStack {
-                    Spacer()
-                    if simulating {
-                        ProgressView().tint(.white)
-                        Text("Simulating…").foregroundColor(.white).fontWeight(.semibold)
-                    } else {
-                        Text("Simulate clinician request").foregroundColor(.white).fontWeight(.semibold)
-                    }
-                    Spacer()
-                }
-                .padding(12)
-                .background(Color(red: 0.54, green: 0.43, blue: 0.77))
-                .cornerRadius(8)
-            }
-            .disabled(simulating)
-        }
-        .padding(14)
-        .background(Color(red: 0.97, green: 0.96, blue: 1.0))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            .foregroundColor(Color(red: 0.85, green: 0.8, blue: 0.91)))
-        .cornerRadius(10)
-        .padding(.top, 8)
-    }
-
-    // MARK: - actions
-
-    private func simulate() {
-        simulating = true
-        simulateError = nil
-        Task {
-            do {
-                _ = try await DebugSimulator.simulate(patientRecipient: patientRecipient)
-                await poller.fetchOnce()
-            } catch {
-                simulateError = "Simulation failed: \(error.localizedDescription)"
-            }
-            simulating = false
-        }
     }
 
     // MARK: - QR rendering (CoreImage, no third-party dep)

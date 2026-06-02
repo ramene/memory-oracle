@@ -1,6 +1,20 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import type { EncounterRequest, EncounterApproval, EncounterRecord } from './types.ts';
+
+// EBR core (memory-oracle-core) — sibling package. We import via relative
+// path because we're not running a workspace package manager here.
+import { detectConflict } from '../memory-oracle-core/detectConflict.mjs';
+import { aiOverview } from '../memory-oracle-core/aiOverview.mjs';
+
+const FIXTURES_ROOT = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'memory-oracle-core',
+  'fixtures'
+);
 
 // In-memory Map<encounterId, EncounterRecord>. Stateless across restarts —
 // that's fine for the demo. Production would use a real persistence layer
@@ -168,6 +182,39 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // POST /ebr-alert — clinician checks a proposed assertion against EBR.
+    // Body: { patientId, scope, proposedAssertion, proposedBy }
+    // Response: { conflict, severity?, conflictKind?, citationCard, aiOverview? }
+    if (url.pathname === '/ebr-alert' && method === 'POST') {
+      const body = await readJson(req).catch(() => null);
+      if (!body || typeof body !== 'object') return bad(res, 400, 'invalid JSON');
+      const b = body as { patientId?: string; scope?: string; proposedAssertion?: string; proposedBy?: string };
+      for (const f of ['patientId', 'scope', 'proposedAssertion'] as const) {
+        if (!b[f]) return bad(res, 400, `missing field: ${f}`);
+      }
+      try {
+        const result = detectConflict({
+          patientId: b.patientId!,
+          scope: b.scope!,
+          proposedAssertion: b.proposedAssertion!,
+          fixturesRoot: FIXTURES_ROOT,
+        });
+        const overview = aiOverview(result);
+        json(res, 200, {
+          conflict: result.conflict,
+          severity: result.severity,
+          conflictKind: result.conflictKind,
+          proposedAssertion: result.proposedAssertion,
+          proposedBy: b.proposedBy,
+          citationCard: result.citationCard,
+          aiOverview: overview,
+        });
+      } catch (e) {
+        bad(res, 500, e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
+
     bad(res, 404, `no route for ${method} ${url.pathname}`);
   } catch (e) {
     bad(res, 500, e instanceof Error ? e.message : String(e));
@@ -184,4 +231,5 @@ server.listen(PORT, () => {
   console.log(`  POST /encounter/<id>/approval     (patient → relay)`);
   console.log(`  GET  /encounter/<id>/approval     (clinician polls approval)`);
   console.log(`  DEL  /encounter/<id>              (cleanup)`);
+  console.log(`  POST /ebr-alert                   (EBR conflict detection + AI overview)`);
 });
