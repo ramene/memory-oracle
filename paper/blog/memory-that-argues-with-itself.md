@@ -151,3 +151,21 @@ Karpathy's autoresearch loops aimed at this and missed because they rewrote skil
 I'd love feedback. The repo is at [`github.com/ramene/memory-oracle`](https://github.com/ramene/memory-oracle). The clinical use case is open for co-authorship on the paper. The trading retrofit is an interesting orthogonal validation. If you're working on long-running AI agents in *any* domain where stale assertions are dangerous, I think this primitive is worth your weekend.
 
 — Ramene · 2026-05-17
+
+---
+
+## Update — June 2026: the multi-device demo lands
+
+When I wrote this in May, the patient and clinician apps were Expo / React Native sketches. The empirical claim was real but the demo had only ever round-tripped on one device. Three things changed in the two weeks after.
+
+**The mobile stack moved to pure SwiftUI.** Expo SDK 54's New Architecture (Fabric) was incompatible with a transitive dep we needed; rather than fight it, I rewrote both apps as pure SwiftUI talking to CryptoKit's `SecureEnclave.P256.KeyAgreement` directly. Same cryptographic primitives (age v1, `piv-p256` stanzas, X25519 + HKDF + ChaCha20-Poly1305 + HMAC-SHA256), simpler stack — no JS bridge, no Bonjour-via-Node, no dependency on a JS-side bech32 implementation that always felt fragile.
+
+**The demo ran end-to-end on two physical devices.** iPhone 12 as the patient, iPad as the clinician, a thirty-line Node.js relay on the same Wi-Fi. The full sequence: clinician scans the patient's QR → submits a scoped `EncounterRequest` → patient's iPhone surfaces it in a pending-requests inbox → patient taps the row → Face ID against the SE-bound key → approval lands at the relay → clinician's iPad polls, decrypts the wrapped session keys with its own Face ID, and renders the amendment-merged record with a live countdown. When the TTL expires (or either party ends the encounter), the session keys are cleared from memory and the records evaporate. The walkthrough at [`docs/DEMO-WALKTHROUGH.md`](https://github.com/ramene/memory-oracle/tree/main/docs/DEMO-WALKTHROUGH.md) reproduces it.
+
+**Multi-identity + EBR alert went in last.** The substrate's strongest clinical claim — that a *second* clinician acting on a proposed order would be surfaced the patient's prior reality before harm — was code-complete by May but had never been demoed. In June it shipped: the iPad hosts two independent clinician identities (Dr. Anthony and Dr. Fajardo in the demo), each backed by its own SE-bound key, each gated by a PIN-plus-Face ID two-factor switch (PINs as salted SHA-256 hashes, SE keys non-extractable). When the active clinician drafts a proposed assertion — say, `prescribe amoxicillin 500mg PO TID` — the relay's `/ebr-alert` endpoint calls `detectConflict()` and `aiOverview()` from `packages/memory-oracle-core`. If the patient has a documented Penicillin anaphylaxis from 2014, the iPad renders a Google-style "AI Overview" pane: TL;DR + multi-paragraph explanation + expandable Sources callout exposing the policy attribution (`amendment-supersedes-original`). The clinician has two routes — *Acknowledge & withdraw* or *Override (document reason)* — and both produce a HIPAA §164.526-compatible audit entry. This is the citation-card moment from the paper, rendered on a tablet a clinician can actually carry.
+
+**The eight figures of §7.4** capture the full sequence: F3 patient home + pending request inbox, F4 patient consent form (pre-biometrics), F5 decrypted records + countdown, F6 multi-identity proof, F7a proposed assertion, F7b EBR Alert AI Overview, F7c sources + action gate, F8 HIPAA §164.526 audit trail. The figures are in [`paper/figures/`](https://github.com/ramene/memory-oracle/tree/main/paper/figures); the LaTeX is in [`paper/lncs/main.tex`](https://github.com/ramene/memory-oracle/tree/main/paper/lncs/main.tex).
+
+The position paper was the bet. Phase 3 is the substrate's proof that the bet renders correctly under real biometrics, real cryptography, and the time pressure of a clinical encounter that's about to commit a harmful order.
+
+— Ramene · 2026-06-02

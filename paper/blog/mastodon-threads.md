@@ -71,3 +71,43 @@ Node + Go CLIs, MCP server, REST API, Expo apps for patient iPhone + clinician i
 Looking for clinical + privacy co-authors for ICAIMH 2026. The substrate generalizes beyond clinical — already retrofit a trading platform too.
 
 #AI #ClinicalAI #RAG
+
+## Variant D: Phase 3 demo thread (5 toots, image-led, June 2026)
+
+> Attach the screenshots in order. F3 → F4 → F8 → F7b → F6. Caption each with the figure handle.
+
+**1/5** [📷 F3 — patient home with QR + pending request inbox]
+
+Shipped Phase 3 of `memory-oracle` — the substrate's clinical claim, end-to-end on two real iOS devices.
+
+Patient iPhone (SwiftUI, CryptoKit, Secure Enclave): generates an `age1se1…` recipient as a QR. Inbox shows pending encounter requests, each row naming the requesting clinician + scopes + TTL.
+
+**2/5** [📷 F4 — patient consent form, pre-biometrics]
+
+Before Face ID fires, the full consent surface is visible: who's asking, what they're asking for, for how long. Approval is gated on Face ID against the SE-bound key. The private key never leaves the iPhone.
+
+The wrapped session keys returned to the clinician are age v1 `piv-p256` stanzas cryptographically bound to the clinician's recipient. No shared secret. No server-side key escrow.
+
+**3/5** [📷 F8 — HIPAA §164.526 audit trail]
+
+Every cryptographic and consent event is appended to a local audit log: `encounter_request_sent`, `approval_received`, `records_decrypted`, `ebr_alert_conflict`, `ebr_alert_acknowledged` / `_overridden`, `encounter_expired_shred`.
+
+HIPAA §164.526 has required amendment-tracking forever and never had a machine-readable substrate for it. Now it has one.
+
+**4/5** [📷 F7b — EBR Alert: AI Overview surfaces penicillin allergy at point of action]
+
+The citation-card moment. The active clinician drafts `prescribe amoxicillin 500mg PO TID`. Before the order commits, `get_citation_card()` checks the accretive record. Patient has a 2014 Penicillin anaphylaxis — amoxicillin is a β-lactam in the same cross-reactive class.
+
+A Google-style "AI Overview" surfaces it: TL;DR, explanation, sources, policy attribution (`amendment-supersedes-original`). Two routes: *Acknowledge & withdraw* or *Override (document reason)*. Both write to the audit log.
+
+This is the exact moment current EHRs are silent.
+
+**5/5** [📷 F6 — multi-identity: two clinicians, two SE keys, two-factor switch]
+
+The substrate's multi-clinician claim is cryptographically honest. Two independent clinician identities on the same iPad, each backed by its own Secure Enclave-bound key, each gated by PIN-plus-Face ID two-factor switch (PINs stored as salted SHA-256, SE keys never leave the device).
+
+A second clinician's record-write is signed by a key materially distinct from the first. That's what makes the EBR alert in toot 4 a real multi-clinician event and not a UI gloss.
+
+Eight figures in §7.4 of the LNCS manuscript; walkthrough + synthetic corpus reproduce every moment.
+
+Repo: github.com/ramene/memory-oracle (MIT) #AI #ClinicalAI #HIPAA

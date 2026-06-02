@@ -76,6 +76,19 @@ The full [position paper](../coala-extension/main.tex) makes the argument in aca
 
 It's a workshop-length paper — ~6 pages, intended for the NeurIPS workshops on Foundation Models for Decision Making, ICLR workshop tracks, or the ACL position-paper track. It's a direct response to the question Sumers et al. left open.
 
+## Update — June 2026: the demo
+
+The position-paper argument lived in synthetic vaults until now. Phase 3 of the project shipped the substrate as two real iOS applications and a stateless Node relay running on the same Wi-Fi:
+
+- **Patient app** (iPhone, pure SwiftUI): generates the `age1se1…` recipient as a QR, shows an inbox of pending encounter requests, gates approval on Face ID against a Secure Enclave-bound key. The private key never leaves the device.
+- **Clinician app** (iPad, pure SwiftUI): scans the QR, submits a scoped encounter request, decrypts the wrapped session keys with its own Face ID, and renders the amendment-merged record with a live TTL countdown.
+- **Multi-identity**: two clinicians can be provisioned on the same iPad — each backed by its own SE-bound key, gated by a PIN-plus-Face ID two-factor switch. PINs are stored as salted SHA-256 hashes; SE keys never leave the device. A second clinician's record-write is signed by a key materially distinct from the first.
+- **EBR Alert at point of action**: when the active clinician drafts a proposed assertion (e.g. `prescribe amoxicillin 500mg PO TID`), `get_citation_card()` checks the patient's accretive record before the order commits. If a conflict is detected — say, a documented 2014 Penicillin anaphylaxis — the substrate surfaces a Google-style "AI Overview" pane with a TL;DR + multi-paragraph explanation + expandable Sources callout, and gates the action on either *Acknowledge & withdraw* or *Override (document reason)*. Both routes produce a HIPAA §164.526-compatible audit entry.
+
+The eight load-bearing moments are figures F3–F8 in §7.4 of the LNCS manuscript. The walkthrough at [`docs/DEMO-WALKTHROUGH.md`](https://github.com/ramene/memory-oracle/tree/main/docs/DEMO-WALKTHROUGH.md) reproduces them; the synthetic patient corpus is at [`packages/memory-oracle-core/fixtures/jane-doe-1959/`](https://github.com/ramene/memory-oracle/tree/main/packages/memory-oracle-core/fixtures/jane-doe-1959).
+
+That's the empirical proof the position-paper argument was waiting for: the substrate's three properties (cryptographic custody, amendment-merged retrieval, accretive surface at point of action) all collapse into one operator-facing experience.
+
 ## Three asks
 
 If you're working in CoALA-aligned agent architectures:
