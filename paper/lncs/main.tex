@@ -6,6 +6,11 @@
 \documentclass[runningheads]{llncs}
 
 \usepackage{graphicx}
+% Search figures in multiple locations so the source compiles cleanly both
+% in the repo layout (paper/lncs/main.tex with paper/figures/ as sibling)
+% AND in a flattened Overleaf zip (main.tex at zip root with figures/
+% as sibling). Listed in fallback order; first match wins.
+\graphicspath{{../figures/}{figures/}{./}}
 \usepackage{xcolor}
 \usepackage{listings}
 \usepackage{booktabs}
@@ -727,7 +732,7 @@ agent safety.}
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F6-shorting-required.png}
+  \includegraphics[width=0.85\textwidth]{F6-shorting-required.png}
   \caption{Three-path correctness on the shorting-authorization scenario
            against the synthetic Alex Cohen trader vault. LLM-only retrieval
            ($0.0$) cannot know the operator's May-13 staged-rollout rule
@@ -998,7 +1003,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.45\textwidth]{../figures/F3-patient-home-pending-request.png}
+  \includegraphics[width=0.45\textwidth]{F3-patient-home-pending-request.png}
   \caption{\textbf{Patient home: QR + pending request inbox.} The
            patient's iPhone exposes its public \texttt{age1se1\ldots}
            recipient as a QR code (so any nearby clinician device can
@@ -1012,7 +1017,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.45\textwidth]{../figures/F4-patient-consent-form.png}
+  \includegraphics[width=0.45\textwidth]{F4-patient-consent-form.png}
   \caption{\textbf{Patient consent form.} The full request is rendered
            on the patient's iPhone \emph{before} biometrics: the
            requesting clinician's name, the clinician's
@@ -1030,7 +1035,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F5-clinician-records-decrypted.png}
+  \includegraphics[width=0.95\textwidth]{F5-clinician-records-decrypted.png}
   \caption{\textbf{Clinician's iPad view after a successful Face~ID
            decrypt.} The decrypted session key for each requested scope
            is shown as a hex prefix (cryptographic proof artifact); the
@@ -1049,7 +1054,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.55\textwidth]{../figures/F6-clinician-multi-identity.png}
+  \includegraphics[width=0.55\textwidth]{F6-clinician-multi-identity.png}
   \caption{\textbf{Multi-identity clinician (two clinicians, one
            device).} The iPad hosts two independent clinician
            identities, each with its own Secure Enclave-bound key and
@@ -1067,7 +1072,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.55\textwidth]{../figures/F7a-add-note-amoxicillin.png}
+  \includegraphics[width=0.55\textwidth]{F7a-add-note-amoxicillin.png}
   \caption{\textbf{Proposed assertion, pre-submit.} The active
            clinician opens an \emph{Add note / order} sheet, picks the
            target scope (\texttt{allergies}), and drafts the proposed
@@ -1082,7 +1087,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F7b-ebr-alert-conflict.png}
+  \includegraphics[width=0.85\textwidth]{F7b-ebr-alert-conflict.png}
   \caption{\textbf{EBR alert at point of action --- the citation card
            moment.} On \emph{Check \& submit}, the accretion layer's
            \texttt{get\_citation\_card()} surface returns the
@@ -1102,7 +1107,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F7c-ebr-alert-sources-actions.png}
+  \includegraphics[width=0.85\textwidth]{F7c-ebr-alert-sources-actions.png}
   \caption{\textbf{Sources expanded + action gate.} Tapping the
            \emph{Sources} callout exposes the underlying provenance
            card: the original allergy record, the citation chain, and
@@ -1118,7 +1123,7 @@ are silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F8-audit-log.png}
+  \includegraphics[width=0.95\textwidth]{F8-audit-log.png}
   \caption{\textbf{HIPAA \S164.526 audit trail.} Every cryptographic
            and consent event in an encounter is appended to a local,
            per-device audit log: \texttt{encounter\_request\_sent},
@@ -1326,7 +1331,7 @@ Go      & warm & $20.71$  & $22.03$  & $5.37$  \\
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F3-latency.png}
+  \includegraphics[width=0.85\textwidth]{F3-latency.png}
   \caption{Per-query retrieval latency distribution against the operator's
            $239$-document live corpus. Cold-cache median: Node $130.77$\,ms,
            Go $21.68$\,ms ($6.0\times$ speedup). Warm-cache median: Node
@@ -1431,7 +1436,7 @@ nDCG@10 derivation worked in
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F7-clinical-required.png}
+  \includegraphics[width=0.85\textwidth]{F7-clinical-required.png}
   \caption{Three-path correctness on the Jane Doe ER reversal-agent
            scenario. LLM-only retrieval (top, $0.0$) cannot know the
            patient was switched to apixaban in 2024. Vector-RAG (middle,
@@ -1481,7 +1486,7 @@ within seconds.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F4-capture-latency.png}
+  \includegraphics[width=0.85\textwidth]{F4-capture-latency.png}
   \caption{Cross-session capture latency on the operator's live
            $239$-document index. The fs-watcher absorbs writes from any
            Claude session and makes them queryable to any other within
@@ -1510,7 +1515,7 @@ an empirically-verified fix.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F5-improvement-trail.png}
+  \includegraphics[width=0.95\textwidth]{F5-improvement-trail.png}
   \caption{Self-improvement trail. Each point is an observed failure
            captured as a memory file and codified as a change to the
            substrate or its operating procedure. All six improvements are
