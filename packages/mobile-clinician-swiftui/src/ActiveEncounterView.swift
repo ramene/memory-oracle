@@ -17,6 +17,9 @@ struct ActiveEncounterView: View {
     let request: EncounterRequest
     let client: RelayClient
     let clinicianKeyTag: String
+    let clinicianName: String
+    let patientId: String
+    let relayBaseUrl: String
     var onEnd: () -> Void
 
     @StateObject private var poller: ApprovalPoller
@@ -25,6 +28,8 @@ struct ActiveEncounterView: View {
     @State private var error: String? = nil
     @State private var secondsLeft: Int = 0
     @State private var expiresAtDate: Date? = nil
+    @State private var showAddNote = false
+    @State private var ebrAlert: EBRAlertResult? = nil
 
     enum DecryptionState {
         case awaitingApproval
@@ -37,11 +42,15 @@ struct ActiveEncounterView: View {
     private let countdownTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(encounterId: String, request: EncounterRequest, client: RelayClient,
-         clinicianKeyTag: String, onEnd: @escaping () -> Void) {
+         clinicianKeyTag: String, clinicianName: String, patientId: String,
+         relayBaseUrl: String, onEnd: @escaping () -> Void) {
         self.encounterId = encounterId
         self.request = request
         self.client = client
         self.clinicianKeyTag = clinicianKeyTag
+        self.clinicianName = clinicianName
+        self.patientId = patientId
+        self.relayBaseUrl = relayBaseUrl
         self.onEnd = onEnd
         self._poller = StateObject(wrappedValue: ApprovalPoller(client: client, encounterId: encounterId))
     }
@@ -70,6 +79,9 @@ struct ActiveEncounterView: View {
                         countdownCard
                         ForEach(decrypted) { ds in
                             recordCard(ds)
+                        }
+                        if decryptionState == .decrypted {
+                            addNoteButton
                         }
                     }
                 case .failed:
@@ -100,6 +112,67 @@ struct ActiveEncounterView: View {
             }
         }
         .onReceive(countdownTimer) { _ in tickCountdown() }
+        .sheet(isPresented: $showAddNote) {
+            AddNoteView(
+                patientId: patientId,
+                availableScopes: decrypted.map { $0.scope },
+                clinicianName: clinicianName,
+                relayBaseUrl: relayBaseUrl,
+                onSubmittedNoConflict: { _, _ in
+                    showAddNote = false
+                },
+                onConflictDetected: { result in
+                    showAddNote = false
+                    ebrAlert = result
+                },
+                onCancel: { showAddNote = false }
+            )
+        }
+        .sheet(item: Binding(
+            get: { ebrAlert.map { EBRAlertWrapper(result: $0) } },
+            set: { ebrAlert = $0?.result }
+        )) { wrapper in
+            EBRAlertView(
+                result: wrapper.result,
+                onAcknowledge: {
+                    AuditStore.append(AuditEntry(
+                        event: "ebr_alert_acknowledged",
+                        encounterId: encounterId
+                    ))
+                    ebrAlert = nil
+                },
+                onOverride: { reason in
+                    AuditStore.append(AuditEntry(
+                        event: "ebr_alert_overridden",
+                        encounterId: encounterId,
+                        note: "reason=\(reason.prefix(120))"
+                    ))
+                    ebrAlert = nil
+                },
+                onDismiss: { ebrAlert = nil }
+            )
+        }
+    }
+
+    private struct EBRAlertWrapper: Identifiable {
+        var id: String { result.proposedAssertion ?? UUID().uuidString }
+        let result: EBRAlertResult
+    }
+
+    private var addNoteButton: some View {
+        Button(action: { showAddNote = true }) {
+            HStack {
+                Image(systemName: "square.and.pencil")
+                Text("Add note / order").fontWeight(.semibold)
+                Spacer()
+            }
+            .padding(14)
+            .foregroundColor(Color(red: 0.07, green: 0.4, blue: 0.65))
+            .background(Color(red: 0.94, green: 0.97, blue: 1.0))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.68, green: 0.78, blue: 0.93), lineWidth: 1))
+            .cornerRadius(10)
+        }
+        .padding(.top, 8)
     }
 
     // MARK: - subviews

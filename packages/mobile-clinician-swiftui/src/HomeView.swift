@@ -12,6 +12,9 @@ struct HomeView: View {
     let clinicianName: String
     var onStartScan: () -> Void
     var onOpenAudit: () -> Void
+    var onIdentityChange: () -> Void
+
+    @State private var showIdentities = false
 
     var body: some View {
         ScrollView {
@@ -45,15 +48,29 @@ struct HomeView: View {
             }
             .padding(24)
         }
+        .sheet(isPresented: $showIdentities) {
+            IdentityListView(
+                onSwitched: { showIdentities = false; onIdentityChange() },
+                onDismiss: { showIdentities = false }
+            )
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("memory-oracle Dr.")
-                .font(.title).fontWeight(.bold)
-            Text("Phase 3c-v · SwiftUI native")
-                .font(.caption)
-                .foregroundColor(.secondary)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("memory-oracle Dr.")
+                    .font(.title).fontWeight(.bold)
+                Text("Phase 3c-vi · multi-identity + EBR alerts")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Button(action: { showIdentities = true }) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.title2)
+                    .foregroundColor(Color(red: 0.07, green: 0.4, blue: 0.65))
+            }
         }
         .padding(.top, 30)
     }

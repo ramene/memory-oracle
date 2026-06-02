@@ -11,34 +11,42 @@
 import SwiftUI
 import Combine
 
-private let SE_KEY_TAG = "mo.clinician.namespace.v1"
-private let CLINICIAN_NAME = "Dr. Y. Chen"   // adjustable; appears in the patient's consent screen
-
 @MainActor
 final class AppModel: ObservableObject {
     enum Screen: Equatable {
         case boot
+        case firstSetup                 // no identities exist yet
         case home
         case scanning
         case request(PatientQRPayload)
-        case active(encounterId: String, request: EncounterRequest, baseUrl: String)
+        case active(encounterId: String, request: EncounterRequest, baseUrl: String, patientId: String)
         case audit
     }
 
     @Published var screen: Screen = .boot
-    @Published var recipient: String? = nil
+    @Published var activeIdentity: ClinicianIdentity? = nil
     @Published var bootError: String? = nil
     @Published var seAvailable: Bool = SeAgeService.isAvailable()
 
     func boot() async {
         guard seAvailable else { return }
-        do {
-            let r = try SeAgeService.getOrCreateIdentity(tag: SE_KEY_TAG)
-            self.recipient = r
-            self.screen = .home
-        } catch {
-            self.bootError = error.localizedDescription
+        let identities = IdentityStore.all()
+        if identities.isEmpty {
+            screen = .firstSetup
+            return
         }
+        // Load active identity; if none set, default to first
+        if let active = IdentityStore.active() {
+            activeIdentity = active
+        } else if let first = identities.first {
+            try? IdentityStore.setActive(first.id)
+            activeIdentity = first
+        }
+        screen = .home
+    }
+
+    func onIdentityChange() {
+        activeIdentity = IdentityStore.active()
     }
 }
 
@@ -50,43 +58,63 @@ struct ContentView: View {
             switch model.screen {
             case .boot:
                 bootView
+            case .firstSetup:
+                FirstIdentitySetup(onCreated: {
+                    Task { await model.boot() }
+                })
             case .home:
-                if let r = model.recipient {
+                if let identity = model.activeIdentity {
                     HomeView(
-                        clinicianRecipient: r,
-                        clinicianName: CLINICIAN_NAME,
+                        clinicianRecipient: identity.recipient,
+                        clinicianName: identity.name,
                         onStartScan: { model.screen = .scanning },
-                        onOpenAudit: { model.screen = .audit }
+                        onOpenAudit: { model.screen = .audit },
+                        onIdentityChange: {
+                            model.onIdentityChange()
+                        }
                     )
                 }
             case .scanning:
                 scanningWrapper
             case .request(let payload):
-                if let r = model.recipient {
+                if let identity = model.activeIdentity {
                     EncounterRequestView(
                         patient: payload,
-                        clinicianRecipient: r,
-                        clinicianName: CLINICIAN_NAME,
+                        clinicianRecipient: identity.recipient,
+                        clinicianName: identity.name,
                         onSubmitted: { id, req, client in
-                            model.screen = .active(encounterId: id, request: req, baseUrl: client.baseUrl)
+                            // For demo: patientId is hardcoded for the synthetic corpus.
+                            // Real system would derive patientId from the QR payload or
+                            // from the relay's encounter record.
+                            model.screen = .active(
+                                encounterId: id,
+                                request: req,
+                                baseUrl: client.baseUrl,
+                                patientId: "jane-doe-1959"
+                            )
                         },
                         onCancel: { model.screen = .home }
                     )
                 }
-            case .active(let encounterId, let request, let baseUrl):
-                ActiveEncounterView(
-                    encounterId: encounterId,
-                    request: request,
-                    client: RelayClient(baseUrl: baseUrl),
-                    clinicianKeyTag: SE_KEY_TAG,
-                    onEnd: { model.screen = .home }
-                )
+            case .active(let encounterId, let request, let baseUrl, let patientId):
+                if let identity = model.activeIdentity {
+                    ActiveEncounterView(
+                        encounterId: encounterId,
+                        request: request,
+                        client: RelayClient(baseUrl: baseUrl),
+                        clinicianKeyTag: identity.seKeyTag,
+                        clinicianName: identity.name,
+                        patientId: patientId,
+                        relayBaseUrl: baseUrl,
+                        onEnd: { model.screen = .home }
+                    )
+                }
             case .audit:
                 AuditView(onDismiss: { model.screen = .home })
             }
         }
         .task {
-            if case .boot = model.screen, model.recipient == nil {
+            if case .boot = model.screen, model.activeIdentity == nil {
                 await model.boot()
             }
         }

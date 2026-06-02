@@ -44,11 +44,15 @@ for f in SeAgeService.swift AgeRecipient.swift Bech32.swift AgeEncryptor.swift A
   echo "    ✓ $f"
 done
 
-# ── 3. Drop in 9 new SwiftUI files ───────────────────────────────────────
-echo "── [3] drop 9 new SwiftUI files ──"
+# ── 3. Drop in 14 SwiftUI files (10 base from 3c-v + 4 new in 3c-vi) ─────
+# 3c-vi additions: IdentityStore + IdentityViews (multi-identity with PIN
+# + Face ID switch) + AddNoteView (proposed assertion entry) + EBRAlertView
+# (AI Overview-styled conflict alert sheet)
+echo "── [3] drop 14 SwiftUI files (10 base + 4 EBR-demo additions) ──"
 for f in ContentView.swift HomeView.swift ScannerView.swift EncounterRequestView.swift \
          ActiveEncounterView.swift AuditView.swift RelayClient.swift \
-         DecryptHandler.swift MockRecords.swift AuditStore.swift; do
+         DecryptHandler.swift MockRecords.swift AuditStore.swift \
+         IdentityStore.swift IdentityViews.swift AddNoteView.swift EBRAlertView.swift; do
   cp "$SWIFTUI_SRC/$f" "$PROJ_DIR/$f"
   echo "    ✓ $f"
 done
