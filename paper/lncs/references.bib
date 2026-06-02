@@ -284,3 +284,19 @@
   howpublished = {\url{https://github.com/mongodb-developer/memoriz}},
   note         = {Long-term memory framework for LLM agents using MongoDB Atlas Vector Search; auto-distills conversational history into structured memories. Accessed 2026-05-30. \emph{TODO: pin URL to canonical repo or paper at finalization.}}
 }
+
+@inproceedings{thakur2021beir,
+  author       = {Thakur, Nandan and Reimers, Nils and R{\"u}ckl{\'e}, Andreas and Srivastava, Abhishek and Gurevych, Iryna},
+  title        = {{BEIR}: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models},
+  booktitle    = {Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks (NeurIPS Datasets)},
+  year         = {2021},
+  note         = {Cross-domain IR benchmark spanning 18 datasets across fact-checking, biomedical QA, scientific retrieval, etc. Established the zero-shot evaluation discipline that exposed the brittleness of dense retrievers on out-of-distribution corpora; BM25 matches or beats most dense models on the majority of BEIR tasks. We cite it as the convention informing this section's metric design (nDCG@10, Recall@10 over the operationally-correct evaluation domain) rather than as a benchmark we test on directly.}
+}
+
+@misc{galileo2024rag,
+  author       = {{Galileo}},
+  title        = {{RAG} \& Hallucination Survey: A Decomposition of Generation Failure into Context Relevance, Faithfulness, Answer Relevance, and Context Sufficiency},
+  year         = {2024},
+  howpublished = {\url{https://www.galileo.ai/blog/}},
+  note         = {Galileo's four-axis decomposition of RAG-generation failure has become a de facto convention in retrieval-augmented systems evaluation. We adopt it in \S\ref{sec:eval-frame} to name which axis EBR moves (Context Relevance) and which it deliberately does not (Faithfulness, Answer Relevance). Accessed 2026-06-02. \emph{TODO: pin to canonical white-paper URL or the Luna companion paper at finalization.}}
+}

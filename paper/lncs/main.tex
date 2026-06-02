@@ -1234,6 +1234,57 @@ failure mode of \emph{operator-authored corrections that must structurally
 precede their originals at retrieval time}, EBR is the only primitive
 among the four that produces a correct decision by construction.
 
+\subsection{Evaluation Frame: Context Relevance, Faithfulness, Answer Relevance, Context Sufficiency}
+\label{sec:eval-frame}
+
+Following the four-axis decomposition of RAG failure modes popularized by
+Galileo's RAG evaluation framework \cite{galileo2024rag}, we name what
+EBR targets and what it does not, so the empirical results in the rest
+of this section are read against the correct axis rather than the
+field's default conflated metric. The four axes are:
+
+\begin{description}[leftmargin=1.5em,style=nextline]
+  \item[\textbf{Context Relevance.}] Did retrieval surface the right
+        passages? \emph{This is the axis EBR is designed to move.} The
+        precedence invariant of Theorem~\ref{thm:precedence} guarantees
+        that the operator-authored amendment lands ahead of its
+        superseded canonical at retrieval time; metric impact is
+        measured by nDCG@10 and Recall@10 in
+        \S\ref{sec:clinical-three-path} below.
+  \item[\textbf{Faithfulness.}] Did the LLM stay grounded in the
+        retrieved context (no hallucination)? \emph{Orthogonal to EBR.}
+        EBR changes \emph{what context is retrieved}; it does not
+        change the generator's faithfulness to that context. We
+        therefore make no faithfulness claim, and our reproducibility
+        notebooks deliberately use deterministic merge output rather
+        than LLM-generated answers so this axis is held constant.
+  \item[\textbf{Answer Relevance.}] Did the response answer the user's
+        question? \emph{Orthogonal.} Same reasoning as faithfulness.
+  \item[\textbf{Context Sufficiency.}] Was the retrieved context
+        \emph{enough} to answer? \emph{Partially affected by EBR but
+        in both directions.} EBR's merge adds the amendment block above
+        the canonical, increasing context volume; this can help (the
+        amendment makes the question answerable) or hurt (context
+        bloat under token budget pressure). The cache-aware prompt
+        assembly note in \S\ref{sec:cache-aware} addresses the
+        downside; we report Recall@10 alongside nDCG@10 so reviewers
+        can verify EBR does not regress Recall.
+\end{description}
+
+\paragraph{The discipline this imposes.} A reviewer should be able to
+ask, of every empirical claim in this section, ``which axis are you
+moving?'' and read the answer off the subsection title. Where this
+section reports binary correctness from the published Deepnote
+notebook, that number is preserved as a regression test on
+implementation fidelity (per \S\ref{sec:methodological-note}); the
+load-bearing claims are restated in nDCG@10 and Recall@10 to match the
+post-BEIR \cite{thakur2021beir} convention for retrieval evaluation.
+The BEIR-style cross-corpus generalization --- evaluating EBR
+against BM25 and dense baselines on three independent supersession-rich
+corpora (clinical, refactor-history, regulatory-amendment) --- is
+in-flight at the time of this submission and will appear as an
+appendix or a follow-up artifact at the project repository.
+
 \subsection{Corpus and Setup}
 
 We evaluate on the operator's actual development memory corpus: $239$
@@ -1320,32 +1371,63 @@ cases. Raw output in
 
 We compare three retrieval paths on the ER reversal-agent question for
 patient Jane Doe, where the operationally-correct answer is
-\emph{andexanet alfa, NOT FFP, NOT vitamin K}:
+\emph{andexanet alfa, NOT FFP, NOT vitamin K}. Per the evaluation frame
+of \S\ref{sec:eval-frame}, the load-bearing axis is Context Relevance;
+we report nDCG@10 and Recall@10 alongside the binary top-$1$
+correctness preserved from the prior empirical run.
 
 \begin{table}[h]
 \centering
 \caption{Three retrieval paths compared on the warfarin$\rightarrow$apixaban
-         reversal-agent question. EBR is the only path that yields a correct
-         decision; the other two structurally cannot.}
+         reversal-agent question. \textbf{Context Relevance} is captured by
+         nDCG@10 (graded relevance: amendment $=2$, canonical $=1$,
+         distractors $=0$). \textbf{Context Sufficiency} is captured by
+         Recall@10. Top-$1$ correctness preserved from the
+         \texttt{clinical-baseline-summary.json} run for continuity with
+         \S\ref{sec:clinical-vector-baseline}. EBR is the only path that
+         moves Context Relevance to ceiling without regressing Recall.}
 \label{tab:clinical-three-path}
 \small
-\begin{tabular}{lcl}
+\begin{tabular}{lcccl}
 \toprule
-\textbf{Path} & \textbf{Correctness} & \textbf{Why} \\
+\textbf{Path} & \textbf{nDCG@10} & \textbf{Recall@10} & \textbf{Top-$1$ corr.} & \textbf{Why} \\
 \midrule
-LLM-only (no retrieval) & $0.0$ & patient-specific drug choice not derivable from training set \\
-Vector-RAG top-$1$ & $0.1$ & 2008 prose out-ranks 2024 record by lexical overlap \\
-\textbf{EBR (amendment-merged)} & $\mathbf{1.0}$ & precedence invariant --- correction always first \\
+LLM-only (no retrieval) & $0.000$ & $0.000$ & $0.0$ & no retrieval; metric undefined, reported as $0$ \\
+Vector-RAG              & $0.874$ & $1.000$ & $0.1$ & both docs retrieved, but canonical out-ranks amendment \\
+\textbf{EBR (merged)}   & $\mathbf{1.000}$ & $\mathbf{1.000}$ & $\mathbf{1.0}$ & amendment at rank $1$ by Theorem~\ref{thm:precedence} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The EBR-vs-vector gap is $0.9$ correctness points. Vector-RAG and LLM-only
-are structurally incapable of preferring the operator-authored correction;
-EBR is the only path that produces a correct decision, by construction
+\paragraph{Reading the metrics together.} The Recall@10 row is the
+sharpest pedagogical point: vector-RAG and EBR both retrieve every
+relevant document the corpus contains --- on the two-relevant-document
+case study, Recall@10 is necessarily $1.0$ for any path that returns
+the top-$10$. \emph{The retrieval engine has the right docs; it just
+ranks them in the wrong order.} That is the Galileo distinction
+between Context Sufficiency and Context Relevance, made visible: a
+top-$K$ LLM consuming vector-RAG's output will read the stale
+canonical first ($9$ of $10$ ER queries; Top-$1$ correctness $0.1$),
+even though the corrective amendment is available at rank $2$. EBR
+moves the amendment to rank $1$ by construction, lifting nDCG@10 from
+$0.874$ to $1.000$ and top-$1$ correctness from $0.1$ to $1.0$. The
+nDCG@10 derivation is conservative: it assumes the vector-RAG amendment
+sits at rank $2$ in the $9/10$ stale-top-$1$ cases (i.e.,~the
+distractor scopes in the
+\texttt{jane-doe-1959} fixture do not displace it), an upper bound on
+the vector-RAG score. The Top-$1$ correctness numbers are the
+operationally-load-bearing ones: in an ER, the agent acts on the top
+result, not on the merged top-$10$.
+
+The EBR-vs-vector gap is $0.126$ nDCG@10 points and $0.9$ top-$1$
+correctness points. Vector-RAG and LLM-only are structurally incapable
+of preferring the operator-authored correction; EBR is the only path
+that produces a correct decision, by construction
 (Theorem~\ref{thm:precedence}). Figure~\ref{fig:clinical-required-litmus}
-visualizes the gap. Raw output in
-\texttt{notebooks/memory-oracle/figures/clinical-required-litmus.json}.
+visualizes the top-$1$ gap. Raw output in
+\texttt{notebooks/memory-oracle/figures/clinical-required-litmus.json};
+nDCG@10 derivation worked in
+\texttt{notebooks/memory-oracle/clinical-ndcg-derivation.md}.
 
 \begin{figure}[h]
   \centering
