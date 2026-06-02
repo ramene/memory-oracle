@@ -1,0 +1,20 @@
+{
+  "name": "@memory-oracle/core",
+  "version": "0.1.0",
+  "description": "EBR core API for citation cards + conflict detection. Implements get_citation_card() per Task #68. Used by encounter-relay's /ebr-alert route.",
+  "type": "module",
+  "main": "getCitationCard.mjs",
+  "exports": {
+    ".": "./getCitationCard.mjs",
+    "./conflict": "./detectConflict.mjs",
+    "./overview": "./aiOverview.mjs"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "private": true,
+  "license": "MIT"
+}

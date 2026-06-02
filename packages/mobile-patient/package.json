@@ -1,7 +1,7 @@
 {
-  "name": "@memory-oracle/mobile",
+  "name": "@memory-oracle/mobile-patient",
   "version": "0.1.0",
-  "description": "Clinician-side QR scanner + patient-contact decryption — POC for memory-oracle clinical deployment",
+  "description": "Patient-side encounter-approval app — Face ID gates release of wrapped session keys to clinicians. Phase 3 of the Verum biometric-unlock rollout (LNCS §7.4 dual-device demo).",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -10,14 +10,15 @@
     "tunnel": "expo start --tunnel"
   },
   "dependencies": {
-    "@expo/ngrok": "^4.1.3",
     "expo": "~54.0.0",
-    "expo-camera": "~17.0.0",
     "expo-crypto": "~15.0.0",
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~3.0.0",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "react-native-qrcode-svg": "^6.3.15",
+    "react-native-svg": "15.11.2",
+    "se-age": "file:./modules/se-age"
   },
   "private": true
 }

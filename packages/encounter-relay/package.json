@@ -1,0 +1,16 @@
+{
+  "name": "@memory-oracle/encounter-relay",
+  "version": "0.1.0",
+  "description": "Tiny stateless relay for the dual-device clinical demo — clinician iPad ⇄ patient iPhone encounter handshake. Phase 3c-iii of the Verum biometric-unlock rollout (LNCS §7.4 figure).",
+  "type": "module",
+  "main": "server.ts",
+  "scripts": {
+    "start": "node --experimental-strip-types server.ts",
+    "test:curl": "bash test/curl-test.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "private": true,
+  "license": "MIT"
+}

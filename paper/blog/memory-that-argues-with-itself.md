@@ -132,7 +132,7 @@ Then start a new Claude Code session in any directory. Notice the auto-priming h
 
 That's the whole loop. It's small. It's a substrate, not a product.
 
-The clinical version with mobile apps and patient-owned encryption is in `packages/mobile/` and `packages/mobile-doctor/`. The trust model is documented in `docs/TRUST-MODEL.md`. The early paper roadmap is in `docs/genesis/PAPER-ROADMAP.md` (preserved as historical artifact). The empirical proof of the precedence invariant is in `docs/examples/clinical-amendment-proof.sh`.
+The clinical version with mobile apps and patient-owned encryption is in `packages/mobile-patient/` and `packages/mobile-doctor/`. The trust model is documented in `docs/TRUST-MODEL.md`. The early paper roadmap is in `docs/genesis/PAPER-ROADMAP.md` (preserved as historical artifact). The empirical proof of the precedence invariant is in `docs/examples/clinical-amendment-proof.sh`.
 
 ## What this is, what it isn't
 

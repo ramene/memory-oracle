@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "memory-oracle Patient",
+    "slug": "memory-oracle-patient",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "_newArchEnabled_comment": "Expo SDK 54 enables React Native New Architecture (Fabric) by default. react-native-svg 15.11.2 (the SDK 54 canonical pin per `npx expo install --fix`) has a Fabric path that does NOT compile against RN 0.81's renamed C++ types (BaseShadowNode, getConcreteProps, getLayoutMetrics). For the demo we don't need Fabric — disabling reverts to the legacy Paper renderer, where 15.11.2's Old Architecture path is clean. The se-age native module uses ExpoModulesCore which is architecture-agnostic, so SE/Face ID still work. For production: upgrade react-native-svg to a version with working Fabric for RN 0.81, then re-enable.",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ai.memoryoracle.patient",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Face ID approves a clinician's request to access your memory namespace for a single encounter. Your private key never leaves this device's Secure Enclave; Face ID only releases a time-limited wrapped key to the clinician.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "_comment": "Demo-only: allow HTTP to the local relay (e.g. http://192.168.x.x:8080). For production at verum.sh/mae.sh: REMOVE this entire NSAppTransportSecurity block — HTTPS handles itself, and ATS is enabled by default."
+        }
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["0A2A.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          }
+        ]
+      },
+      "_privacyManifests_comment": "Apple requires PrivacyInfo.xcprivacy for App Store submission. We declare ZERO data collection and ZERO tracking — the relay only sees opaque age-encrypted blobs (not 'collected' per Apple's definition; see App Store Connect 'App Privacy' section). The four NSPrivacyAccessedAPITypes are standard Required-Reasons API declarations for Expo SDK's typical usage; reason codes per https://developer.apple.com/documentation/bundleresources/privacy_manifest_files/describing_use_of_required_reason_api . Expo SDK 54+ reads this block during `npx expo prebuild` and emits the actual ios/<App>/PrivacyInfo.xcprivacy file."
+    },
+    "extra": {
+      "relayBaseUrl": "http://192.168.100.5:8080",
+      "_relayBaseUrl_comment": "Override at runtime via EXPO_PUBLIC_RELAY_URL env var. Default is a placeholder LAN IP — set to the actual Sequoia local IP before building for the demo."
+    },
+    "android": {
+      "package": "ai.memoryoracle.patient",
+      "permissions": []
+    },
+    "plugins": []
+  }
+}
