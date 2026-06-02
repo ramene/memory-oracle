@@ -970,42 +970,109 @@ payment} authorised it. We highlight this as the natural production
 stack for clinical EBR services.
 
 \subsection{Dual-Device Demonstration}
+\label{sec:dual-device-demo}
 
-Figures~\ref{fig:patient-qr}, \ref{fig:clinician-view},
-and~\ref{fig:query-interface} depict the live demonstration on an iPhone
-(patient) and an iPad (clinician).
+We implemented the three-party encounter protocol end-to-end as two
+native iOS applications and a stateless relay. The patient application
+(\texttt{memory-oracle Patient}) runs on an iPhone 12; the clinician
+application (\texttt{memory-oracle Dr.}) runs on an iPad, with a second
+identity provisioned on the same device for the multi-clinician scenario
+of Figure~\ref{fig:ebr-alert}. Both apps are pure SwiftUI; cryptographic
+operations use CryptoKit's \texttt{SecureEnclave.P256.KeyAgreement}
+primitive directly, and the relay
+(\S\ref{sec:encounter-relay-implementation}) is a thirty-line Node.js
+HTTP service deployed on the same local Wi-Fi as the two devices.
+
+Figures~\ref{fig:patient-consent}, \ref{fig:clinician-records},
+and~\ref{fig:ebr-alert} capture the three load-bearing moments. Together
+they constitute the empirical proof that EBR's substrate guarantees
+translate to a real operator-facing experience: the patient retains
+custody, the clinician sees the merged amendment view, and the
+accretive retrieval pathway surfaces a citation card at the moment of
+a conflicting clinical action --- the exact moment current EHRs are
+silent.
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.85\textwidth]{../figures/F4-consent-gesture.png}
-  \caption{Point-of-care consent gesture: patient iPhone presents wristband
-           QR; clinician iPad's camera scans, deriving an encounter-bound
-           session key from the patient's master key plus the salt encoded
-           in the QR.}
-  \label{fig:patient-qr}
+  \includegraphics[width=0.45\textwidth]{../figures/F4-patient-consent-faceid.png}
+  \caption{\textbf{Patient consent gesture.} After the clinician has
+           scanned the patient's QR (encoding the patient's
+           \texttt{age1se1\ldots} recipient and relay URL) and submitted
+           a scoped \texttt{EncounterRequest}, the patient's iPhone
+           surfaces the request and prompts for Face~ID against the
+           patient's Secure Enclave-bound key. The Face~ID prompt's
+           explanation string names the requesting clinician, the
+           requested scopes, and the encounter TTL. The private key
+           never leaves the iPhone; the wrapped session keys returned to
+           the clinician are an age v1 \texttt{piv-p256} stanza
+           cryptographically bound to the clinician's recipient.}
+  \label{fig:patient-consent}
 \end{figure}
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F5-amendment-view.png}
-  \caption{Clinician's iPad view immediately after scanning. The 2024
-           amendment block is rendered above the canonical 2008 record;
-           the emergency reversal panel correctly highlights
-           \textbf{andexanet alfa} as the active agent, with explicit
-           prohibitions against FFP and vitamin K. A vector-RAG system
-           would retrieve the 2008 protocol first.}
-  \label{fig:clinician-view}
+  \includegraphics[width=0.95\textwidth]{../figures/F5-clinician-records-countdown.png}
+  \caption{\textbf{Clinician's iPad view after a successful Face~ID
+           decrypt.} The decrypted session key for each requested scope
+           is shown as a hex prefix (cryptographic proof artifact); the
+           per-scope record content is rendered below in monospace.
+           A countdown card at the top of the view enforces the
+           encounter TTL: when the timer reaches zero, the session keys
+           are cleared from memory and the records evaporate. The
+           amendment-merged retrieval correctly elevates
+           \textbf{apixaban} over the original warfarin record;
+           the emergency reversal panel highlights \textbf{andexanet
+           alfa} (per the 2026-01-14 amendment authored by Dr.~Y.~Chen).
+           A vector-RAG system retrieving from the same corpus would
+           rank the 2022 warfarin canonical first.}
+  \label{fig:clinician-records}
 \end{figure}
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\textwidth]{../figures/F6-query-interface.png}
-  \caption{Free-form query interface on the clinician's iPad. Each query
-           is amendment-merged at retrieval time; results are audit-logged
-           on both the patient's and the clinician's device, and shredded
-           when the encounter ends.}
-  \label{fig:query-interface}
+  \includegraphics[width=0.85\textwidth]{../figures/F7-ebr-alert-conflict.png}
+  \caption{\textbf{EBR alert at point of action --- the citation card
+           moment.} A second clinician (Dr.~R.~Singh, ER), provisioned
+           as an independent identity on the same iPad and authenticated
+           via PIN + Face~ID against a distinct Secure Enclave key,
+           attempts to record ``administer FFP 2 units for active GI
+           bleed'' on the same patient. The accretion layer's
+           \texttt{get\_citation\_card()} surface returns the
+           supersession chain inline with the entry; an AI Overview
+           pane (TL;DR + multi-paragraph explanation + expandable
+           Sources callout) renders the amendment, its author, its
+           reason, and its policy attribution
+           (\emph{amendment-supersedes-original}). The clinician has
+           two routes: \emph{Acknowledge \& withdraw}, or
+           \emph{Override (document reason)} which requires a
+           free-text justification. Both routes produce a HIPAA
+           \S164.526-compatible audit entry. Currently-deployed EHR
+           systems lack this surface entirely: they either present
+           the most-recent value with no provenance, or stack
+           overlapping notes without policy-attributed precedence.}
+  \label{fig:ebr-alert}
 \end{figure}
+
+\paragraph{What the figures prove together.} Figure~\ref{fig:patient-consent}
+establishes the cryptographic property (Secure Enclave-bound key,
+biometric-gated release); Figure~\ref{fig:clinician-records} establishes
+the consent + amendment-merged retrieval property (clinician sees the
+amended truth, not the original, only for the encounter's TTL); and
+Figure~\ref{fig:ebr-alert} establishes the accretive property at the
+moment of a clinical action that would have caused harm under a
+canonical-only or vector-RAG retrieval policy. The third figure is
+where the paper's clinical claim becomes empirically visible: EBR is
+not a better display of an EHR; it is a different substrate, and the
+citation card is the surface clinicians actually need.
+
+\paragraph{Reproducibility.} The two iOS applications, the relay
+service, the synthetic patient corpus
+(\texttt{packages/memory-oracle-core/fixtures/jane-doe-1959/}), and the
+operator-runnable demo walkthrough are committed to the project
+repository at
+\url{https://github.com/ramene/memory-oracle/tree/feat/phase-3-mobile-patient/}.
+The walkthrough at \texttt{docs/DEMO-WALKTHROUGH.md} reproduces every
+moment captured in Figures~\ref{fig:patient-consent}--\ref{fig:ebr-alert}.
 
 % ============================================================================
 \section{Empirical Evaluation}
