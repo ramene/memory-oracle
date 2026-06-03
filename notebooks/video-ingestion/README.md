@@ -1,137 +1,126 @@
 # Video ingestion via Qwen2.5-VL on Deepnote
 
-A batch video-ingestion pattern: trigger via Deepnote Jobs API, POST → poll →
-fetch `/work/output.json`. Pairs nicely with any downstream consumer that needs
-structured signal extraction from a YouTube URL (per-frame inference + transcript
-aggregation).
+A video-ingestion pattern: trigger via the Deepnote v2 Runs API, POST → poll →
+fetch `output.json`. Pairs nicely with any downstream consumer that needs
+structured signal extraction from a YouTube URL or local video file.
 
-This notebook is published as a generic reference for the Deepnote-Jobs-API +
-Qwen2.5-VL pattern. It is **not** a memory-oracle / EBR component. Operators
+This notebook is published as a generic reference for the Deepnote v2 Runs API
++ Qwen2.5-VL pattern. It is **not** a memory-oracle / EBR component. Operators
 running EBR workloads do not need this notebook; it is included only because the
 pattern is reusable and was authored in the same window as the substrate work.
 
-## Pipeline
+## Pipeline (current implementation)
 
-`yt-dlp` → frame extraction (ffmpeg, every `FRAME_INTERVAL_SEC`) → **Qwen2.5-VL**
-per-frame inference with a configurable prompt profile → aggregated signal record
-→ `/work/output.json` → any downstream consumer (e.g., a GPU-manager service that
-polls the Deepnote job and reads the file).
+`yt-dlp` (or local file) → frame extraction (ffmpeg, every `FRAME_INTERVAL_SEC`)
+→ **Qwen2.5-VL** per-frame inference with a configurable prompt profile →
+aggregated signal record → `OUTPUT_PATH`.
 
-## Parameters (Deepnote Jobs API payload)
+> ⚠️ **Architectural note (2026-06-03):** The current per-frame pattern THROWS
+> AWAY temporal context across frames — each frame is processed in isolation.
+> Qwen2.5-VL natively supports VIDEO input with full temporal awareness (motion,
+> narrative arc, event localization across the full 1+ hour video). A v2
+> rewrite using `{"type": "video", ...}` content blocks via
+> `qwen_vl_utils.process_vision_info(messages, return_video_kwargs=True)` is
+> queued. See the project's curriculum work for the full motivation. Until then,
+> per-frame mode is the working baseline.
+
+## Parameters
+
+These are env vars the notebook reads at start. When triggering via Deepnote's
+v2 Runs API (below), they must be passed as `inputs` — which requires
+DECLARED INPUT BLOCKS in the notebook with matching names. Without input
+blocks, the API call returns `"Input X is not defined for this notebook"`.
 
 | Parameter | Default | Notes |
 |---|---|---|
-| `VIDEO_URL` | *(required)* | Full YouTube URL or 11-char video ID |
+| `VIDEO_URL` | *(required)* | Full YouTube URL, direct https URL, OR local file path (e.g., `/datasets/_deepnote_work/work/foo.mp4`). Local files are detected via path resolution and skip yt-dlp. |
 | `EXTRACT_MODE` | `both` | `frames` \| `transcript` \| `both` |
 | `FRAME_INTERVAL_SEC` | `12` | Seconds between sampled frames |
-| `MAX_FRAMES` | `30` | Hard cap regardless of duration (cost control) |
+| `MAX_FRAMES` | `30` | Hard cap regardless of duration (cost control). Raise to 200+ for high-fidelity work; cost on T4 is ~$0.06/min. |
 | `MODEL` | `Qwen/Qwen2.5-VL-7B-Instruct` | Override to `-3B-Instruct` on small GPUs |
-| `PROMPT_PROFILE` | `general-summary` | Add additional profiles in the notebook's prompt-config cell |
-| `OUTPUT_PATH` | `/work/output.json` | Where the result lands inside the Deepnote container |
+| `PROMPT_PROFILE` | `trading-intelligence` | `trading-intelligence` \| `general-summary` \| `trading-education` — defined in §5's `PROMPT_PROFILES` dict |
+| `OUTPUT_PATH` | `/work/output.json` | Where the result lands. For Deepnote, prefer `/datasets/_deepnote_work/work/output.json` so it shows in the Files panel. |
+| `YT_COOKIES_PATH` | `/work/youtube-cookies.txt` | OPTIONAL — workaround for YouTube bot-check on data-center IPs. Export cookies via browser extension on a logged-in machine, upload to Deepnote. |
 
-## Triggering the job (curl)
+## Triggering via Deepnote v2 Runs API
+
+> The v2 API is the current public API. The v1 endpoints documented in older
+> notebooks/agents are DEAD — they return Not Found. See
+> [`https://deepnote.com/docs/api-reference`](https://deepnote.com/docs/api-reference).
 
 ```bash
-# Set these once
-DEEPNOTE_TOKEN='<api-key from Deepnote → Settings → API tokens>'
-DEEPNOTE_PROJECT_ID='<project-id from Deepnote project URL>'
-NOTEBOOK_ID='<notebook-id, get via GET /v1/projects/{pid}/notebooks>'
+# Set once
+DEEPNOTE_TOKEN='<api-key from Deepnote → Account settings → API keys>'
+NOTEBOOK_ID='<notebook-id from notebook URL: ...notebook/<this-part>>'
 
-# Submit job — returns notebookRunId
-curl -X POST "https://api.deepnote.com/v1/projects/${DEEPNOTE_PROJECT_ID}/jobs" \
+# Submit a run (returns runId, status: pending)
+curl -X POST https://api.deepnote.com/v2/runs \
   -H "Authorization: Bearer ${DEEPNOTE_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
     "notebookId": "'"${NOTEBOOK_ID}"'",
-    "parameters": {
+    "inputs": {
       "VIDEO_URL":          "https://youtu.be/REPLACE_ME",
       "EXTRACT_MODE":       "both",
-      "FRAME_INTERVAL_SEC": 12,
-      "MAX_FRAMES":         30,
+      "FRAME_INTERVAL_SEC": "12",
+      "MAX_FRAMES":         "30",
       "MODEL":              "Qwen/Qwen2.5-VL-7B-Instruct",
-      "PROMPT_PROFILE":     "general-summary"
-    }
+      "PROMPT_PROFILE":     "trading-intelligence",
+      "OUTPUT_PATH":        "/datasets/_deepnote_work/work/output.json"
+    },
+    "detached": true
   }'
-# → {"notebookRunId": "nbr_abc123", "status": "queued"}
+# → {"runId": "<uuid>", "status": "pending", "createdAt": "..."}
 
-# Poll
-curl -s "https://api.deepnote.com/v1/projects/${DEEPNOTE_PROJECT_ID}/jobs/nbr_abc123" \
-  -H "Authorization: Bearer ${DEEPNOTE_TOKEN}" | jq .status
-# → "running" → "succeeded"
-
-# Fetch output (Deepnote File API)
-curl -s "https://api.deepnote.com/v1/projects/${DEEPNOTE_PROJECT_ID}/files/work/output.json" \
-  -H "Authorization: Bearer ${DEEPNOTE_TOKEN}" > output.json
+# Poll status
+curl -H "Authorization: Bearer ${DEEPNOTE_TOKEN}" \
+  https://api.deepnote.com/v2/runs/<RUN_ID>
+# → {"run": {"status": "running"|"success"|"error"|..., ...}}
 ```
 
-## Reference consumer wrapper
+**Critical**: the `inputs` keys MUST match declared Deepnote input blocks in
+the notebook (top-of-notebook UI elements). Without input blocks, the API
+rejects the run. Add input blocks via Deepnote's block picker: `+ between
+cells → Text input / Select input / Big number`.
 
-A minimal Node.js wrapper for triggering, polling, and reading the result:
+## Input source dispatch
 
-```javascript
-import { setTimeout as sleep } from 'node:timers/promises';
+The §3 cell auto-detects the source type:
 
-const BASE = 'https://api.deepnote.com/v1';
-const TOKEN = process.env.DEEPNOTE_TOKEN;
-const PROJ  = process.env.DEEPNOTE_PROJECT_ID;
-const NB    = process.env.DEEPNOTE_VIDEO_NOTEBOOK_ID;
+- **Local path** (file exists at the given path): skips yt-dlp, runs ffprobe
+  for metadata, looks for sidecar `.vtt`/`.srt` subtitles
+- **YouTube / HTTPS URL**: uses yt-dlp with optional cookies file
+- **Google Drive**: connect Drive in Deepnote's Integrations panel; uploaded
+  files appear under `/datasets/_deepnote_work/work/` or wherever Drive mounts
 
-const headers = {
-  'Authorization': `Bearer ${TOKEN}`,
-  'Content-Type':  'application/json',
-};
+### YouTube bot-check workaround
 
-export async function ingestVideo({ url, extractMode = 'both', maxFrames = 30 }) {
-  const submit = await fetch(`${BASE}/projects/${PROJ}/jobs`, {
-    method: 'POST', headers,
-    body: JSON.stringify({
-      notebookId: NB,
-      parameters: {
-        VIDEO_URL: url,
-        EXTRACT_MODE: extractMode,
-        MAX_FRAMES: maxFrames,
-      },
-    }),
-  }).then(r => r.json());
+YouTube blocks data-center IPs with "Sign in to confirm you're not a bot."
+Two options:
 
-  const { notebookRunId } = submit;
+1. **Cookies**: Export cookies via "Get cookies.txt LOCALLY" browser
+   extension (logged-in browser on your machine), upload `youtube-cookies.txt`
+   to Deepnote, point `YT_COOKIES_PATH` at it
+2. **Download locally first**: `yt-dlp -f 'best[height<=360]' -o ~/Downloads/video.mp4 <url>`,
+   upload to Deepnote, set `VIDEO_URL` to the local path
 
-  // Poll every 15s, up to 30 min
-  for (let i = 0; i < 120; i++) {
-    await sleep(15_000);
-    const status = await fetch(
-      `${BASE}/projects/${PROJ}/jobs/${notebookRunId}`,
-      { headers }
-    ).then(r => r.json());
-    if (status.status === 'succeeded') {
-      const file = await fetch(
-        `${BASE}/projects/${PROJ}/files/work/output.json`,
-        { headers }
-      ).then(r => r.json());
-      return file;
-    }
-    if (status.status === 'failed') {
-      throw new Error(`Deepnote job failed: ${JSON.stringify(status)}`);
-    }
-  }
-  throw new Error('Deepnote job timed out after 30 min');
-}
-```
+For recurring use (curriculum building), pre-stage videos in Google Drive
+and point the notebook at the Drive-mounted paths.
 
-## Output schema (`/work/output.json`)
+## Output schema (`output.json`)
 
 ```json
 {
   "schema_version": 1,
-  "source": "youtube/<videoId>",
-  "source_url": "https://youtu.be/<videoId>",
+  "source": "youtube/<videoId>" | "local/<filename>",
+  "source_url": "...",
   "title": "...",
   "uploader": "...",
   "duration_sec": 312,
-  "extracted_at": "2026-05-25T01:00:00Z",
+  "extracted_at": "2026-06-03T...",
   "extract_mode": "both",
   "model": "Qwen/Qwen2.5-VL-7B-Instruct",
-  "prompt_profile": "general-summary",
+  "prompt_profile": "trading-intelligence",
   "frames_analyzed": 26,
   "transcript": {
     "text": "...",
@@ -139,26 +128,27 @@ export async function ingestVideo({ url, extractMode = 'both', maxFrames = 30 })
     "segment_count": 87,
     "char_count": 5429
   },
-  "aggregate": {
-    "dominant_topics": ["..."],
-    "topic_frame_counts": {"...": 18},
-    "time_sensitivity_dist": {"now": 14, "this-week": 9, "longer-term": 3},
-    "speaker_confidence_dist": {"high": 16, "medium": 8, "low": 2}
-  },
-  "frames": [{ "frame_idx": 0, "timestamp_sec": 0.0, "signal": { } }]
+  "aggregate": { ... },          // profile-dependent shape
+  "frames": [{"frame_idx": 0, "timestamp_sec": 0.0, "signal": {...}}, ...]
 }
 ```
 
-The `aggregate` shape is profile-dependent — the notebook's prompt-config cell
-defines what fields each `PROMPT_PROFILE` produces.
+The `aggregate` shape is profile-dependent — `PROMPT_PROFILES` in §5 defines
+what fields each profile produces.
 
 ## Provider fallbacks
 
-If Deepnote is unavailable for any reason, the same notebook adapts to other
-GPU providers with minor trigger-side changes:
+If Deepnote is unavailable:
+- **Modal serverless GPU** — same notebook, different trigger
+- **Colab Pro+** — Colab's background-execution feature
+- **Local** — `localhost:11434` (Ollama) or a local vLLM endpoint with a Qwen-VL variant
 
-- **Modal serverless GPU** — same notebook, different trigger; adapt the wrapper
-  above to hit Modal's API.
-- **Colab Pro+** — same notebook, run via Colab's background-execution feature.
-- **Local** — verify `localhost:11434` (Ollama) or a local vLLM endpoint has a
-  Qwen-VL variant; cheapest if you already have GPU hardware.
+## Operational notes
+
+- Setup dependencies: ffmpeg (apt), yt-dlp, transformers>=4.49, accelerate,
+  bitsandbytes>=0.43, qwen-vl-utils, pillow, einops, sentencepiece, torchvision.
+  For optimal video loading: `pip install 'qwen-vl-utils[decord]==0.0.8'`.
+- 8-bit quantization triggers cuBLAS status 15 errors on T4. Use **4-bit nf4
+  via BitsAndBytesConfig** instead — cleaner, faster, no errors. See §4.
+- For Hugging Face faster downloads + rate-limit avoidance, set `HF_TOKEN` env
+  var. The notebook will use it automatically.
