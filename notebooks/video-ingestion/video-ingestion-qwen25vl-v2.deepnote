@@ -1,6 +1,6 @@
 metadata:
   createdAt: 2026-06-04T12:55:46.458000Z
-  modifiedAt: '2026-06-04T17:17:51.724846Z'
+  modifiedAt: '2026-06-04T17:27:11.072727Z'
 project:
   id: ae2b2f17-fb74-43bf-a749-b5a5b8a163c8
   integrations:
@@ -994,6 +994,21 @@ project:
             print(f'video backend: {os.environ.get("FORCE_QWENVL_VIDEO_READER", "auto")}, decord: {decord.__version__}')
             print(f'process_vision_info supports return_video_kwargs: {_HAS_VIDEO_KWARGS}')
 
+
+            def _normalize_video_kwargs(vk):
+                """transformers 5.x uses StrictDataclass validation that rejects list-wrapped
+                scalars. qwen-vl-utils 0.0.8+ returns video_kwargs with list-per-video shape
+                (e.g. {'fps': [1.0]}). When there's only one video per call, unwrap scalars
+                so the processor's dataclass validation passes."""
+                if not isinstance(vk, dict):
+                    return vk
+                for key in ('fps',):
+                    v = vk.get(key)
+                    if isinstance(v, list) and len(v) == 1:
+                        vk[key] = v[0]
+                return vk
+
+
             def _infer_chunk(chunk_path):
                 messages = [{
                     'role': 'user',
@@ -1007,10 +1022,11 @@ project:
 
                 # Two distinct API paths — fps source differs to avoid duplicate kwarg
                 if _HAS_VIDEO_KWARGS:
-                    # NEW path: video_kwargs carries fps (and second_per_grid_ts); do NOT pass fps explicitly
+                    # NEW path: video_kwargs carries fps (list-wrapped); unwrap, do NOT pass fps explicitly
                     image_inputs, video_inputs, video_kwargs = process_vision_info(
                         messages, return_video_kwargs=True
                     )
+                    video_kwargs = _normalize_video_kwargs(video_kwargs)
                     inputs = vl_processor(
                         text=[text],
                         images=image_inputs,
@@ -1024,6 +1040,7 @@ project:
                     result = process_vision_info(messages)
                     if len(result) == 3:
                         image_inputs, video_inputs, video_kwargs = result
+                        video_kwargs = _normalize_video_kwargs(video_kwargs)
                     else:
                         image_inputs, video_inputs = result
                         video_kwargs = {}
