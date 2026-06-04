@@ -9,6 +9,21 @@ This notebook is published as a generic reference for the Deepnote v2 Runs API
 running EBR workloads do not need this notebook; it is included only because the
 pattern is reusable and was authored in the same window as the substrate work.
 
+## File formats — `.ipynb` vs `.deepnote`
+
+Each notebook is checked in twice:
+
+| File | Format | Carries |
+|---|---|---|
+| `*-v2.ipynb` | Standard Jupyter JSON | Cell content (code + markdown), kernel metadata. Works in any Jupyter-compatible host. |
+| `*-v2.deepnote` | Deepnote project YAML export | Cell content **plus** Deepnote-specific input-block declarations (Text Input, Select Input, etc.) and project-level integration stubs. |
+
+**When to use which**:
+- **Deepnote**: import the `.deepnote` file via Project menu → Import — gets you the full project with input blocks pre-declared, ready for v2 Runs API triggering.
+- **Jupyter / Colab / VS Code / local**: open the `.ipynb` — you'll lose the input-block UI but the env-vars cell at the top of the notebook provides the same defaults via `os.environ.setdefault`.
+
+Both files are kept in sync per cell. Only the `.deepnote` adds the input-block layer on top.
+
 ## Pipeline (current implementation)
 
 `yt-dlp` (or local file) → frame extraction (ffmpeg, every `FRAME_INTERVAL_SEC`)

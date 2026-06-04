@@ -1,0 +1,1322 @@
+metadata:
+  createdAt: 2026-06-04T12:55:46.458000Z
+  modifiedAt: '2026-06-04T16:03:27.477602Z'
+project:
+  id: ae2b2f17-fb74-43bf-a749-b5a5b8a163c8
+  integrations:
+    - id: a35d346b-5265-4eb8-a25a-eab284b047a4
+      name: memory_oracle
+      type: github_package
+    - id: 550a8cbc-9875-49c2-b974-d3d715d1e822
+      name: work
+      type: google-drive-v3
+  name: native-video
+  notebooks:
+    - blocks:
+        - id: 2ab9175ed9074b2a84bab1bf2b1f0ca8
+          blockGroup: d3d3577a4de94c759252e3c8e5463f06
+          sortingKey: "000000"
+          type: markdown
+          content: >-
+            # mae — video ingestion v2 via Qwen2.5-VL (NATIVE VIDEO MODE)
+
+
+            **Per Task #92** (2026-06-03). Replaces v1 per-frame inference with native video input —
+
+            Qwen2.5-VL processes each video chunk as a single temporally-aware sequence
+
+            (motion, narrative arc, event localization preserved).
+
+
+            ## Pipeline
+
+
+            `yt-dlp` (or local file or gdrive) → ffmpeg chunking (`CHUNK_DURATION_SEC` each) →
+
+            **Qwen2.5-VL with `{type: video, ...}` input per chunk** → per-chunk structured JSON
+
+            → aggregate (provenance-anchored) → `OUTPUT_PATH`.
+
+
+            ## Why native video mode (vs v1 per-frame)
+
+
+            Qwen2.5-VL's model card: *"Qwen2.5-VL can comprehend videos of over 1 hour, with the
+
+            ability of capturing event by pinpointing the relevant video segments."* Per-frame mode
+
+            throws away motion, sequence, and narrative — exactly what curriculum building needs.
+
+
+            ## Parameters (Deepnote input blocks — must be declared in UI)
+
+
+            - `VIDEO_URL` — local path, YouTube URL, or direct https URL
+
+            - `EXTRACT_MODE` — `frames` | `transcript` | `both`
+
+            - `CHUNK_DURATION_SEC` — segment length (default 600 = 10 min)
+
+            - `VIDEO_FPS` — sample fps per chunk (default 1.0; raise for dense visual content)
+
+            - `VIDEO_MAX_PIXELS` — per-frame pixel budget (default 360*420 = 151200)
+
+            - `MODEL` — `Qwen/Qwen2.5-VL-7B-Instruct` (override to `-3B` on small GPUs)
+
+            - `PROMPT_PROFILE` — `trading-education` (default) | `trading-intelligence` | `general-summary`
+
+            - `OUTPUT_PATH` — where the result lands (prefer `/datasets/_deepnote_work/work/output.json` on Deepnote)
+
+            - `MAX_NEW_TOKENS` — per-chunk output cap (default 2048)
+
+
+            ## Output schema (`schema_version: 2`)
+
+
+            Same envelope shape as v1 but `frames` array replaced by `chunks` array; each chunk's
+
+            `signal` is one rich temporally-aware structured response, not 30 isolated stills.
+          metadata: {}
+        - id: 21d92817d5b54825868d6477215a8940
+          blockGroup: f1ddbd72ca454a2f95f60d2ba9102fde
+          sortingKey: "000001"
+          contentHash: d44e6bbc
+          executionCount: 1
+          executionFinishedAt: 2026-06-04T15:31:04.708000Z
+          executionStartedAt: 2026-06-04T15:31:04.707000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587064707
+            execution_millis: 1
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: VIDEO_URL
+            deepnote_input_label: ""
+            deepnote_variable_value: /datasets/_deepnote_work/work/BRUlSm4gdQ4.mp4
+            deepnote_variable_default_value: /datasets/_deepnote_work/work/<video>.mp4
+        - id: ae69177ccdb742b1956cf08d39ec0f36
+          blockGroup: f1ddbd72ca454a2f95f60d2ba9102fde
+          sortingKey: "000002"
+          contentHash: f84bc5e8
+          executionCount: 2
+          executionFinishedAt: 2026-06-04T15:31:04.758000Z
+          executionStartedAt: 2026-06-04T15:31:04.757000Z
+          outputs: []
+          type: input-select
+          content: ""
+          metadata:
+            execution_start: 1780587064757
+            execution_millis: 1
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: EXTRACT_MODE
+            deepnote_input_label: ""
+            deepnote_variable_value: both
+            deepnote_variable_default_value: both
+            deepnote_variable_options:
+              - frames
+              - transcript
+              - both
+            deepnote_variable_custom_options:
+              - frames
+              - transcript
+              - both
+            deepnote_variable_selected_variable: ""
+            deepnote_variable_select_type: from-options
+        - id: 3ba5eff09e934eb9b3f5b468e4d967a9
+          blockGroup: 78c4999c5bfe4a90ab7ed749bf09c8aa
+          sortingKey: "000003"
+          contentHash: 3429f0df
+          executionCount: 3
+          executionFinishedAt: 2026-06-04T15:31:04.958000Z
+          executionStartedAt: 2026-06-04T15:31:04.958000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587064958
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: CHUNK_DURATION_SEC
+            deepnote_variable_value: "600"
+        - id: a83a13ac6a4c46ad8034ec293a1b77d3
+          blockGroup: 78c4999c5bfe4a90ab7ed749bf09c8aa
+          sortingKey: "000004"
+          contentHash: 142d275b
+          executionCount: 4
+          executionFinishedAt: 2026-06-04T15:31:05.018000Z
+          executionStartedAt: 2026-06-04T15:31:05.018000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587065018
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: VIDEO_MAX_PIXELS
+            deepnote_variable_value: "151200"
+        - id: 525bc29e4f414ddfb1e5983652a8040b
+          blockGroup: 350c9422ada5407d9b77b1bb90e92a80
+          sortingKey: "000005"
+          contentHash: 7e5c7cc
+          executionCount: 5
+          executionFinishedAt: 2026-06-04T15:31:05.068000Z
+          executionStartedAt: 2026-06-04T15:31:05.068000Z
+          outputs: []
+          type: input-select
+          content: ""
+          metadata:
+            execution_start: 1780587065068
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: PROMPT_PROFILE
+            deepnote_input_label: ""
+            deepnote_variable_value: trading-education
+            deepnote_variable_default_value: trading-education
+            deepnote_variable_options:
+              - trading-education
+              - trading-intelligence
+              - general-summary
+            deepnote_variable_custom_options:
+              - trading-education
+              - trading-intelligence
+              - general-summary
+            deepnote_variable_selected_variable: ""
+            deepnote_variable_select_type: from-options
+        - id: 7a3b0745b9f247e9aff9427d415b9bf0
+          blockGroup: 350c9422ada5407d9b77b1bb90e92a80
+          sortingKey: "000006"
+          contentHash: 6e5c620e
+          executionCount: 6
+          executionFinishedAt: 2026-06-04T15:31:05.118000Z
+          executionStartedAt: 2026-06-04T15:31:05.118000Z
+          outputs: []
+          type: input-select
+          content: ""
+          metadata:
+            execution_start: 1780587065118
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: MODEL
+            deepnote_input_label: ""
+            deepnote_variable_value: Qwen/Qwen2.5-VL-7B-Instruct
+            deepnote_variable_default_value: Qwen/Qwen2.5-VL-7B-Instruct
+            deepnote_variable_options:
+              - Qwen/Qwen2.5-VL-7B-Instruct
+              - Qwen/Qwen2.5-VL-3B-Instruct
+            deepnote_variable_custom_options:
+              - Qwen/Qwen2.5-VL-7B-Instruct
+              - Qwen/Qwen2.5-VL-3B-Instruct
+            deepnote_variable_selected_variable: ""
+            deepnote_variable_select_type: from-options
+        - id: 8c2bf5cb23b24cc0a01a32680b644faf
+          blockGroup: 4800fffe37da477ea3912773f172a304
+          sortingKey: "000007"
+          contentHash: 1718dccc
+          executionCount: 7
+          executionFinishedAt: 2026-06-04T15:31:05.168000Z
+          executionStartedAt: 2026-06-04T15:31:05.168000Z
+          outputs: []
+          type: input-select
+          content: ""
+          metadata:
+            execution_start: 1780587065168
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: WHISPER_MODEL
+            deepnote_variable_value: base
+            deepnote_variable_default_value: base
+            deepnote_variable_options:
+              - base
+              - small
+              - medium
+              - large-v3
+            deepnote_variable_custom_options:
+              - base
+              - small
+              - medium
+              - large-v3
+            deepnote_variable_selected_variable: ""
+            deepnote_variable_select_type: from-options
+        - id: d8b5bc830cc149fab4abd05e4d9b3720
+          blockGroup: 4800fffe37da477ea3912773f172a304
+          sortingKey: "000008"
+          contentHash: ece5da68
+          executionCount: 8
+          executionFinishedAt: 2026-06-04T15:31:05.218000Z
+          executionStartedAt: 2026-06-04T15:31:05.217000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587065217
+            execution_millis: 1
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: MAX_NEW_TOKENS
+            deepnote_variable_value: "2048"
+        - id: 12dcdf0ce3f44588bcdc8eaf294c7647
+          blockGroup: 878c429bf3dc493ab585151074d7414d
+          sortingKey: "000009"
+          contentHash: a180dcc5
+          executionCount: 9
+          executionFinishedAt: 2026-06-04T15:31:05.278000Z
+          executionStartedAt: 2026-06-04T15:31:05.278000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587065278
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: OUTPUT_PATH
+            deepnote_variable_value: /datasets/_deepnote_work/work/output.json
+        - id: 2edc061812654bdab7e8e184f3686bb8
+          blockGroup: 878c429bf3dc493ab585151074d7414d
+          sortingKey: "000010"
+          contentHash: ff44fc07
+          executionCount: 10
+          executionFinishedAt: 2026-06-04T15:31:05.338000Z
+          executionStartedAt: 2026-06-04T15:31:05.338000Z
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780587065338
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: VIDEO_FPS
+            deepnote_variable_value: "1.0"
+        - id: beff23a32e20458f81237165facf81b8
+          blockGroup: bb8e7feada234f10898e63941f7d3dc6
+          sortingKey: "000011"
+          contentHash: a084f4ea
+          executionCount: 11
+          executionFinishedAt: 2026-06-04T15:31:05.398000Z
+          executionStartedAt: 2026-06-04T15:31:05.397000Z
+          outputs: []
+          type: code
+          content: >-
+            # Manual env-vars for standalone UI runs. When triggered via Deepnote v2 API,
+
+            # inputs are injected from declared input blocks and override these defaults.
+
+            import os
+
+
+            # Where Deepnote mounts uploaded files / Drive integration
+
+            PROJECT_WORK = '/datasets/_deepnote_work/work'
+
+
+            os.environ.setdefault('VIDEO_URL',          f'{PROJECT_WORK}/<your-video>.mp4')
+
+            os.environ.setdefault('EXTRACT_MODE',       'both')
+
+            os.environ.setdefault('CHUNK_DURATION_SEC', '600')      # 10 min chunks
+
+            os.environ.setdefault('VIDEO_FPS',          '1.0')      # 1 frame per second sampled by Qwen
+
+            os.environ.setdefault('VIDEO_MAX_PIXELS',   str(360*420))
+
+            os.environ.setdefault('MODEL',              'Qwen/Qwen2.5-VL-7B-Instruct')
+
+            os.environ.setdefault('PROMPT_PROFILE',     'trading-education')
+
+            os.environ.setdefault('OUTPUT_PATH',        f'{PROJECT_WORK}/output.json')
+
+            os.environ.setdefault('MAX_NEW_TOKENS',     '2048')
+
+            os.environ.setdefault('WHISPER_MODEL',      'base')
+
+
+            # HF token for faster model downloads + rate-limit avoidance
+
+            # Either set HF_TOKEN via Deepnote integrations, or paste here for one-off runs.
+
+            # os.environ['HF_TOKEN'] = 'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'  # paste your HF token here for one-off runs (preferred: Deepnote project Env Vars)
+          metadata:
+            execution_start: 1780587065397
+            execution_millis: 1
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: b2226426329c45c3b096468ab28f778e
+          blockGroup: f8a8b9e49f114ff4b0a2d423e879df75
+          sortingKey: "000012"
+          outputs: []
+          type: code
+          content: |-
+            # Install all deps unconditionally — Deepnote TensorFlow base image lacks several.
+            # CRITICAL: qwen-vl-utils[decord]>=0.0.8 — decord is the fast video decoder; 0.0.8+
+            # adds return_video_kwargs support needed for native video mode.
+            # --force-reinstall on qwen-vl-utils bypasses any base-image upper bound.
+            !apt-get update -qq && apt-get install -y -qq ffmpeg
+            !pip install -q --upgrade yt-dlp 'transformers>=4.49' 'accelerate>=0.34' 'bitsandbytes>=0.43' pillow einops sentencepiece torchvision openai-whisper
+            !pip install -q --force-reinstall --no-deps 'qwen-vl-utils[decord]>=0.0.8'
+
+            # Verify the install — print version + signature so we catch regressions early
+            import qwen_vl_utils, inspect
+            print(f'qwen-vl-utils version: {getattr(qwen_vl_utils, "__version__", "unknown")}')
+            print(f'process_vision_info signature: {inspect.signature(qwen_vl_utils.process_vision_info)}')
+          metadata:
+            execution_start: 1780587065458
+            execution_millis: 8180
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: fd9c07620c624731933412cc800354d7
+          blockGroup: c34f430ea36444b293aa33f7cc75af66
+          sortingKey: "000013"
+          contentHash: 9e17cbfd
+          executionCount: 13
+          executionFinishedAt: 2026-06-04T15:31:21.914000Z
+          executionStartedAt: 2026-06-04T15:31:13.698000Z
+          outputs:
+            - name: stderr
+              text: >
+                /root/venv/lib/python3.11/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update
+                jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+                  from .autonotebook import tqdm as notebook_tqdm
+                ffmpeg:       /usr/bin/ffmpeg
+
+                torch:        2.12.0+cu130  cuda: True
+
+                transformers: 5.10.1
+
+                bitsandbytes: 0.49.2
+
+                GPU:          Tesla T4 (14 GB VRAM)
+
+                decord:       0.6.0
+              output_type: stream
+          type: code
+          content: >-
+            import shutil, torch, transformers, yt_dlp, bitsandbytes
+
+            print('ffmpeg:      ', shutil.which('ffmpeg'))
+
+            print('torch:       ', torch.__version__, ' cuda:', torch.cuda.is_available())
+
+            print('transformers:', transformers.__version__)
+
+            print('bitsandbytes:', bitsandbytes.__version__)
+
+            if torch.cuda.is_available():
+                print('GPU:         ', torch.cuda.get_device_name(0),
+                      f'({torch.cuda.get_device_properties(0).total_memory // 1024**3} GB VRAM)')
+            # Verify decord installed (the [decord] extra)
+
+            try:
+                import decord
+                print('decord:      ', decord.__version__)
+            except ImportError:
+                print('decord:       MISSING — video loading will fall back to per-frame ffmpeg (slow)')
+          metadata:
+            execution_start: 1780587073698
+            execution_millis: 8216
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: 3d93f9124f2e40bbb3c6187945593d56
+          blockGroup: 16c057faef754a819fe2684abe35228a
+          sortingKey: "000014"
+          contentHash: 76e7d417
+          executionCount: 14
+          executionFinishedAt: 2026-06-04T15:31:22.308000Z
+          executionStartedAt: 2026-06-04T15:31:21.967000Z
+          outputs:
+            - name: stdout
+              text: >
+                torch device: cuda
+
+                GPU: Tesla T4 (14 GB)
+
+                WORK: /datasets/_deepnote_work/work
+              output_type: stream
+          type: code
+          content: >-
+            # §1 Setup — paths, device, helpers
+
+            import os, sys, json, subprocess, time, base64, hashlib, re
+
+            from pathlib import Path
+
+            from datetime import datetime, timezone
+
+
+            def _pip(*pkgs):
+                subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', *pkgs], check=True)
+
+            # Device detection
+
+            import torch
+
+            DEVICE = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
+
+            print(f'torch device: {DEVICE}')
+
+            if DEVICE == 'cuda':
+                print(f'GPU: {torch.cuda.get_device_name(0)} ({torch.cuda.get_device_properties(0).total_memory // 1024**3} GB)')
+
+            # Work dir — auto-detect (Deepnote mount preferred, then /work, then /tmp)
+
+            for candidate in ['/datasets/_deepnote_work/work', '/work', '/tmp/mae-video-work']:
+                if Path(candidate).exists() or candidate.startswith('/tmp'):
+                    WORK = Path(candidate)
+                    break
+            WORK.mkdir(parents=True, exist_ok=True)
+
+            CHUNKS_DIR = WORK / 'chunks'
+
+            CHUNKS_DIR.mkdir(exist_ok=True)
+
+            print(f'WORK: {WORK}')
+          metadata:
+            execution_start: 1780587081967
+            execution_millis: 341
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: abd343e19ae54627a5b834bd11382ca1
+          blockGroup: 6596587692244b0b986b04f8e8ee2826
+          sortingKey: "000015"
+          type: markdown
+          content: >-
+            ## §2 Parameters — Deepnote inputs OR env vars
+
+
+            When triggered via Deepnote v2 API (`POST /v2/runs`), inputs are injected as
+
+            Python globals matching declared input block names. For standalone UI runs,
+
+            the env-vars cell at top provides defaults.
+          metadata: {}
+        - id: ecababed7b9d47ceb2951f95ced54ab0
+          blockGroup: 89c44d6b9c584eb3893ecbd7b80edd95
+          sortingKey: "000016"
+          contentHash: b4bf3469
+          executionCount: 15
+          executionFinishedAt: 2026-06-04T15:31:22.368000Z
+          executionStartedAt: 2026-06-04T15:31:22.368000Z
+          outputs:
+            - name: stdout
+              text: >
+                VIDEO_URL:          /datasets/_deepnote_work/work/BRUlSm4gdQ4.mp4
+
+                EXTRACT_MODE:       both
+
+                CHUNK_DURATION_SEC: 300
+
+                VIDEO_FPS:          0.5
+
+                VIDEO_MAX_PIXELS:   151200
+
+                MODEL:              Qwen/Qwen2.5-VL-7B-Instruct
+
+                PROMPT_PROFILE:     trading-education
+
+                OUTPUT_PATH:        /datasets/_deepnote_work/work/output.json
+
+                MAX_NEW_TOKENS:     512
+              output_type: stream
+          type: code
+          content: >-
+            # §2 Read all parameters (env vars OR input-block globals)
+
+            VIDEO_URL          = globals().get('VIDEO_URL')          or os.environ['VIDEO_URL']
+
+            EXTRACT_MODE       = globals().get('EXTRACT_MODE')       or os.environ.get('EXTRACT_MODE', 'both')
+
+            CHUNK_DURATION_SEC = int(globals().get('CHUNK_DURATION_SEC') or os.environ.get('CHUNK_DURATION_SEC', 600))
+
+            VIDEO_FPS          = float(globals().get('VIDEO_FPS') or os.environ.get('VIDEO_FPS', 1.0))
+
+            VIDEO_MAX_PIXELS   = int(globals().get('VIDEO_MAX_PIXELS') or os.environ.get('VIDEO_MAX_PIXELS', 360*420))
+
+            MODEL              = globals().get('MODEL')              or os.environ.get('MODEL',
+            'Qwen/Qwen2.5-VL-7B-Instruct')
+
+            PROMPT_PROFILE     = globals().get('PROMPT_PROFILE')     or os.environ.get('PROMPT_PROFILE',
+            'trading-education')
+
+            OUTPUT_PATH        = Path(globals().get('OUTPUT_PATH')   or os.environ.get('OUTPUT_PATH',
+            '/work/output.json'))
+
+            MAX_NEW_TOKENS     = int(globals().get('MAX_NEW_TOKENS') or os.environ.get('MAX_NEW_TOKENS', 2048))
+
+            WHISPER_MODEL_SIZE = globals().get('WHISPER_MODEL')      or os.environ.get('WHISPER_MODEL', 'base')
+
+
+            print(f'VIDEO_URL:          {VIDEO_URL}')
+
+            print(f'EXTRACT_MODE:       {EXTRACT_MODE}')
+
+            print(f'CHUNK_DURATION_SEC: {CHUNK_DURATION_SEC}')
+
+            print(f'VIDEO_FPS:          {VIDEO_FPS}')
+
+            print(f'VIDEO_MAX_PIXELS:   {VIDEO_MAX_PIXELS}')
+
+            print(f'MODEL:              {MODEL}')
+
+            print(f'PROMPT_PROFILE:     {PROMPT_PROFILE}')
+
+            print(f'OUTPUT_PATH:        {OUTPUT_PATH}')
+
+            print(f'MAX_NEW_TOKENS:     {MAX_NEW_TOKENS}')
+          metadata:
+            execution_start: 1780587082368
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: e5a0b3ff3ce54762bb6aaa758affb158
+          blockGroup: 3db6708cd36a4e9f891fd133e5fba6bb
+          sortingKey: "000017"
+          type: markdown
+          content: >-
+            ## §3 Input dispatch — local file OR URL
+
+
+            Same robust resolver as v1 (multi-candidate path resolution for local files,
+
+            yt-dlp with optional cookies for URLs). Sets `VIDEO_PATH`, `VIDEO_ID`,
+
+            `duration_sec`, `title`, `uploader`, `SUBS_PATH` (None if no sidecar).
+          metadata: {}
+        - id: 98c5128e3ecf4eba8d229983931ac599
+          blockGroup: d651c10a9c0e4206a99dfcea9d3620a8
+          sortingKey: "000018"
+          contentHash: 7c1679fc
+          executionCount: 16
+          executionFinishedAt: 2026-06-04T15:31:26.287000Z
+          executionStartedAt: 2026-06-04T15:31:22.417000Z
+          outputs:
+            - name: stdout
+              text: >
+                LOCAL video: /datasets/_deepnote_work/work/BRUlSm4gdQ4.mp4
+
+                duration: 4415.7s (73.6 min)
+
+                title:    BRUlSm4gdQ4
+              output_type: stream
+          type: code
+          content: >-
+            # §3 — input dispatch (local file or URL)
+
+            is_url = VIDEO_URL.startswith(('http://', 'https://'))
+
+
+            def _resolve_local(s):
+                bare = Path(s).name
+                candidates = [
+                    Path(s), Path.cwd() / s, WORK / s, WORK / bare,
+                    Path('/work') / bare, Path.cwd() / bare,
+                    Path('/datasets/_deepnote_work') / bare,
+                    Path('/datasets/_deepnote_work/work') / bare,
+                ]
+                for c in candidates:
+                    try:
+                        if c.exists() and c.is_file():
+                            return c.resolve()
+                    except Exception:
+                        pass
+                for root in [Path('/work'), Path.cwd(), Path('/tmp'),
+                              Path('/datasets/_deepnote_work')]:
+                    if root.exists():
+                        for found in root.rglob(bare):
+                            if found.is_file():
+                                return found.resolve()
+                return None
+
+            resolved = _resolve_local(VIDEO_URL) if not is_url else None
+
+            is_local = resolved is not None
+
+
+            if not (is_local or is_url):
+                raise ValueError(f'VIDEO_URL "{VIDEO_URL}" not found as local file and not http(s) URL')
+
+            if is_local:
+                VIDEO_PATH = resolved
+                VIDEO_ID = VIDEO_PATH.stem
+                print(f'LOCAL video: {VIDEO_PATH}')
+                probe = subprocess.run(
+                    ['ffprobe', '-v', 'error', '-show_entries', 'format=duration:format_tags=title',
+                     '-of', 'json', str(VIDEO_PATH)],
+                    capture_output=True, text=True, check=True
+                )
+                info = json.loads(probe.stdout)
+                duration_sec = float(info.get('format', {}).get('duration', 0))
+                title = info.get('format', {}).get('tags', {}).get('title') or VIDEO_PATH.stem
+                uploader = 'local'
+                SUBS_PATH = None
+                for ext in ['.en.vtt', '.vtt', '.en.srt', '.srt']:
+                    candidate = VIDEO_PATH.with_suffix(ext)
+                    if candidate.exists():
+                        SUBS_PATH = candidate
+                        print(f'  sidecar: {SUBS_PATH.name}')
+                        break
+            else:
+                import yt_dlp
+                yt_match = re.search(r'(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|v/))([A-Za-z0-9_-]{11})', VIDEO_URL)
+                VIDEO_ID = yt_match.group(1) if yt_match else hashlib.sha1(VIDEO_URL.encode()).hexdigest()[:11]
+                VIDEO_PATH = WORK / f'{VIDEO_ID}.mp4'
+                SUBS_PATH = WORK / f'{VIDEO_ID}.en.vtt'
+                ydl_opts = {
+                    'format': 'best[height<=360][ext=mp4]/best[height<=360]/best',
+                    'outtmpl': str(VIDEO_PATH.with_suffix('')) + '.%(ext)s',
+                    'writesubtitles': EXTRACT_MODE in ('transcript', 'both'),
+                    'writeautomaticsub': EXTRACT_MODE in ('transcript', 'both'),
+                    'subtitleslangs': ['en'], 'subtitlesformat': 'vtt',
+                    'quiet': True, 'no_warnings': True,
+                }
+                cookies_path = os.environ.get('YT_COOKIES_PATH', '/work/youtube-cookies.txt')
+                if Path(cookies_path).exists():
+                    ydl_opts['cookiefile'] = cookies_path
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(VIDEO_URL, download=True)
+                duration_sec = info.get('duration', 0)
+                title = info.get('title', '')
+                uploader = info.get('uploader', '')
+                if not SUBS_PATH.exists():
+                    SUBS_PATH = None
+
+            print(f'duration: {duration_sec:.1f}s ({duration_sec/60:.1f} min)')
+
+            print(f'title:    {title}')
+          metadata:
+            execution_start: 1780587082417
+            execution_millis: 3870
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: 2b27df65b727401cb011ea14686aa869
+          blockGroup: 1b3520f142d143b38f1ebea593c21a53
+          sortingKey: "000019"
+          type: markdown
+          content: >-
+            ## §4 Video chunking via ffmpeg
+
+
+            Split into `CHUNK_DURATION_SEC` segments (default 10 min). Each chunk becomes
+
+            ONE input to Qwen — temporal context preserved within the chunk, narrative
+
+            arc captured across chunks via the aggregate step.
+
+
+            Uses `-c copy` for zero re-encode (fast, lossless). Skips chunks that already
+
+            exist (idempotent — operator can re-run §4 cheaply).
+          metadata: {}
+        - id: c91386390bfc4366922f5648f3f0e888
+          blockGroup: a6ce37a05fbf4f70b579293d2b618ad7
+          sortingKey: "000020"
+          contentHash: 30ede03b
+          executionCount: 17
+          executionFinishedAt: 2026-06-04T15:31:28.912000Z
+          executionStartedAt: 2026-06-04T15:31:26.348000Z
+          outputs:
+            - name: stdout
+              text: >
+                Chunking into 15 segments of 300s...
+                  chunk 1/15: 0-300s (11.9 MB)
+                  chunk 2/15: 300-600s (12.1 MB)
+                  chunk 3/15: 600-900s (12.3 MB)
+                  chunk 4/15: 900-1200s (11.5 MB)
+                  chunk 5/15: 1200-1500s (9.8 MB)
+                  chunk 6/15: 1500-1800s (9.9 MB)
+                  chunk 7/15: 1800-2100s (9.4 MB)
+                  chunk 8/15: 2100-2400s (12.1 MB)
+                  chunk 9/15: 2400-2700s (10.7 MB)
+                  chunk 10/15: 2700-3000s (9.4 MB)
+                  chunk 11/15: 3000-3300s (12.4 MB)
+                  chunk 12/15: 3300-3600s (11.6 MB)
+                  chunk 13/15: 3600-3900s (11.7 MB)
+                  chunk 14/15: 3900-4200s (12.0 MB)
+                  chunk 15/15: 4200-4416s (7.9 MB)
+                Total chunks: 15
+              output_type: stream
+          type: code
+          content: >-
+            # §4 — ffmpeg chunking
+
+            import math
+
+
+            n_chunks = max(1, math.ceil(duration_sec / CHUNK_DURATION_SEC))
+
+            chunk_records = []
+
+
+            print(f'Chunking into {n_chunks} segments of {CHUNK_DURATION_SEC}s...')
+
+            for i in range(n_chunks):
+                start_sec = i * CHUNK_DURATION_SEC
+                end_sec = min((i + 1) * CHUNK_DURATION_SEC, duration_sec)
+                chunk_path = CHUNKS_DIR / f'{VIDEO_ID}_chunk_{i:03d}.mp4'
+                if not chunk_path.exists():
+                    cmd = ['ffmpeg', '-y', '-loglevel', 'error',
+                           '-ss', str(start_sec), '-t', str(CHUNK_DURATION_SEC),
+                           '-i', str(VIDEO_PATH), '-c', 'copy', str(chunk_path)]
+                    subprocess.run(cmd, check=True)
+                chunk_records.append({
+                    'chunk_idx': i,
+                    'start_sec': start_sec,
+                    'end_sec': end_sec,
+                    'path': str(chunk_path),
+                    'size_mb': chunk_path.stat().st_size / 1024 / 1024,
+                })
+                print(f'  chunk {i+1}/{n_chunks}: {start_sec:.0f}-{end_sec:.0f}s ({chunk_records[-1]["size_mb"]:.1f} MB)')
+
+            print(f'Total chunks: {len(chunk_records)}')
+          metadata:
+            execution_start: 1780587086348
+            execution_millis: 2564
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: f4def1a4bb2746d3bb63d4a13eac6bc1
+          blockGroup: e92f3aa4535f4a48b43767e7a0c4e46a
+          sortingKey: "000021"
+          type: markdown
+          content: >-
+            ## §5 Qwen2.5-VL model load
+
+
+            **4-bit NF4 quantization on T4** (avoids 8-bit cuBLAS status 15 errors). FP16
+
+            on larger GPUs (≥20 GB). 3B fallback for CPU / very small GPUs.
+
+
+            Skips entirely if `EXTRACT_MODE=transcript` (only Whisper needed).
+          metadata: {}
+        - id: 215d6639b9674997a2934123e86e6f1f
+          blockGroup: e5a6bb838fef4cd98a629cf6a10346ad
+          sortingKey: "000022"
+          contentHash: 8ced544d
+          executionCount: 18
+          executionFinishedAt: 2026-06-04T15:32:57.951000Z
+          executionStartedAt: 2026-06-04T15:31:28.967000Z
+          outputs:
+            - name: stdout
+              text: >
+                GPU has 14 GB - 4-bit NF4 (BitsAndBytesConfig)
+
+                Loading Qwen/Qwen2.5-VL-7B-Instruct on cuda...
+
+                Fetching 5 files: 100%|██████████| 5/5 [01:18<00:00, 15.72s/it]
+
+                Loading weights:   0%|          | 2/729
+                [00:01<07:43,  1.57it/s]/root/venv/lib/python3.11/site-packages/bitsandbytes/backends/cuda/ops.py:213:
+                FutureWarning: _check_is_size will be removed in a future PyTorch release along with
+                guard_size_oblivious.     Use _check(i >= 0) instead.
+                  torch._check_is_size(blocksize)
+                Loading weights: 100%|██████████| 729/729 [00:05<00:00, 128.13it/s]
+                  loaded in 88.3s
+              output_type: stream
+          type: code
+          content: >-
+            # §5 Qwen2.5-VL model load — 4-bit NF4 on T4
+
+            vl_model = None
+
+            vl_processor = None
+
+
+            if EXTRACT_MODE in ('frames', 'both'):
+                try:
+                    from transformers import (
+                        Qwen2_5_VLForConditionalGeneration,
+                        AutoProcessor,
+                        BitsAndBytesConfig,
+                    )
+                except ImportError:
+                    _pip('transformers>=4.49', 'accelerate', 'qwen-vl-utils[decord]', 'bitsandbytes')
+                    from transformers import (
+                        Qwen2_5_VLForConditionalGeneration,
+                        AutoProcessor,
+                        BitsAndBytesConfig,
+                    )
+
+                load_kwargs = {'device_map': 'auto'}
+                if DEVICE == 'cuda':
+                    gpu_gb = torch.cuda.get_device_properties(0).total_memory // 1024**3
+                    if gpu_gb < 20 and '7B' in MODEL:
+                        print(f'GPU has {gpu_gb} GB - 4-bit NF4 (BitsAndBytesConfig)')
+                        load_kwargs['quantization_config'] = BitsAndBytesConfig(
+                            load_in_4bit=True,
+                            bnb_4bit_quant_type='nf4',
+                            bnb_4bit_compute_dtype=torch.float16,
+                            bnb_4bit_use_double_quant=True,
+                        )
+                    else:
+                        print(f'GPU has {gpu_gb} GB - FP16')
+                        load_kwargs['torch_dtype'] = torch.float16
+                else:
+                    print('No GPU - FP32 on CPU (slow; use 3B model)')
+                    load_kwargs['torch_dtype'] = torch.float32
+
+                print(f'Loading {MODEL} on {DEVICE}...')
+                t0 = time.time()
+                vl_model = Qwen2_5_VLForConditionalGeneration.from_pretrained(MODEL, **load_kwargs)
+                vl_processor = AutoProcessor.from_pretrained(MODEL)
+                print(f'  loaded in {time.time()-t0:.1f}s')
+            else:
+                print('EXTRACT_MODE=transcript - skipping VL model load')
+          metadata:
+            execution_start: 1780587088967
+            execution_millis: 88984
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: 2f68896ec0934bd98df6c44c2106eee4
+          blockGroup: ee47784735224fbe92e29eb5726a6a91
+          sortingKey: "000023"
+          type: markdown
+          content: >-
+            ## §6 Per-chunk inference — NATIVE VIDEO MODE
+
+
+            Each chunk fed as `{type: video, video: file://<chunk_path>, fps, max_pixels}`
+
+            via `qwen_vl_utils.process_vision_info(messages, return_video_kwargs=True)`.
+
+            Qwen sees the FULL chunk as a temporal sequence — motion, narrative, event
+
+            localization preserved. One inference per chunk, not per frame.
+
+
+            Three prompt profiles defined; default for the curriculum work is
+
+            `trading-education` (deep pedagogical extraction).
+          metadata: {}
+        - id: 7a923ed59ea24963b448de5b37d1a8ce
+          blockGroup: 58f2191a31eb498d8f8a749bb7550760
+          sortingKey: "000024"
+          contentHash: 4c87ece3
+          executionCount: 19
+          executionFinishedAt: 2026-06-04T15:32:57.998000Z
+          executionStartedAt: 2026-06-04T15:32:57.998000Z
+          outputs:
+            - name: stdout
+              text: >
+                PROMPT_PROFILE=trading-education (2221 chars)
+              output_type: stream
+          type: code
+          content: >-
+            PROMPT_PROFILES = {
+                'trading-intelligence': '''You are a market-intelligence analyst watching a financial-content video SEGMENT for an algorithmic trading system.
+
+            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null for fields with no
+            signal. Do not invent.
+
+
+            {
+              "segment_summary": "2-3 sentence narrative of what happens in this segment",
+              "tickers": ["BTC", "ETH"],
+              "price_callouts": [{"ticker": "BTC", "price": 67500, "context": "...", "timestamp_in_segment_sec": <number>}],
+              "sentiment": {"BTC": "bullish|bearish|neutral"},
+              "macro_events": ["FOMC Wed"],
+              "chart_patterns": ["BTC head-and-shoulders"],
+              "speaker_confidence": "high|medium|low|null",
+              "time_sensitivity": "now|this-week|longer-term|null"
+            }
+
+
+            Return ONLY the JSON object, no preamble.''',
+
+                'general-summary': '''Describe what happens in this video segment in 4-6 sentences. Capture the narrative arc, what is shown, what is said. Return JSON {"summary": "..."}.''',
+
+                'trading-education': '''You are a trading-curriculum analyst reviewing a SEGMENT of an educational trading video for an algorithmic trading agent ("the kid"). The kid will be quizzed on what was taught and is expected to apply these lessons in production trading.
+
+            For THIS VIDEO SEGMENT (which is one part of a longer lesson), return STRICT JSON with these exact fields.
+            Use empty arrays / null / empty strings for fields with no signal in this segment. Do not invent content
+            that is not actually shown or said.
+
+
+            {
+              "segment_summary": "3-5 sentence narrative of what is taught in this segment, in order, capturing the actual teaching arc",
+              "concepts": [
+                {"name": "volume bar", "timestamp_in_segment_sec": <when introduced>, "definition_as_taught": "what the speaker actually said it means"}
+              ],
+              "patterns_named": [
+                {"name": "Bull Flag Breakout", "visual_description": "what it looks like on the chart in this segment", "entry_rule": "verbatim or paraphrased entry trigger as the speaker described it", "exit_or_stop_rule": "if mentioned", "confirmation_signals": ["MACD above signal", "volume > 5x avg"]}
+              ],
+              "formulas_or_math": [
+                {"name": "volume bar threshold", "expression": "cum_volume >= V_threshold", "explanation": "what the math means in plain English"}
+              ],
+              "filters_or_scanners": [
+                {"name": "low float filter", "predicate": "share_float < 10_000_000", "rationale": "small float amplifies % moves"}
+              ],
+              "code_or_pseudocode": [
+                {"language": "python|pseudo", "snippet": "if bar.high > prev_bar.high and macd.line > macd.signal: fire_entry()", "purpose": "what this code does"}
+              ],
+              "key_quotes": ["verbatim instructive statements from the narrator if shown on screen as caption OR spoken-and-clearly-pedagogical"],
+              "actionable_for_agent": ["specific things an algorithmic trading agent should DO with this knowledge"],
+              "visual_examples_described": [
+                {"chart_or_diagram": "what is on screen", "what_it_demonstrates": "what the speaker is pointing to / explaining"}
+              ],
+              "prerequisites_referenced": ["concepts the viewer must already know to follow this segment"],
+              "risk_warnings": ["asymmetric-downside flags or risk warnings raised by speaker"]
+            }
+
+
+            Return ONLY the JSON object, no preamble.''',
+
+            }
+
+
+            PROMPT = PROMPT_PROFILES.get(PROMPT_PROFILE, PROMPT_PROFILES['trading-education'])
+
+            print(f'PROMPT_PROFILE={PROMPT_PROFILE} ({len(PROMPT)} chars)')
+          metadata:
+            execution_start: 1780587177998
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: f83bd511f4bf41eaa3c0f541acb89aa3
+          blockGroup: 429b29cf984c4d16a32734c9e64b2f69
+          sortingKey: "000025"
+          outputs: []
+          type: code
+          content: |-
+            # §6 — per-chunk native-video inference (defensive against qwen-vl-utils version drift)
+            from qwen_vl_utils import process_vision_info
+            import inspect
+
+            _PVI_SIG = inspect.signature(process_vision_info)
+            _HAS_VIDEO_KWARGS = 'return_video_kwargs' in _PVI_SIG.parameters
+            print(f'process_vision_info supports return_video_kwargs: {_HAS_VIDEO_KWARGS}')
+
+            def _infer_chunk(chunk_path):
+                messages = [{
+                    'role': 'user',
+                    'content': [
+                        {'type': 'video', 'video': f'file://{chunk_path}',
+                         'max_pixels': VIDEO_MAX_PIXELS, 'fps': VIDEO_FPS},
+                        {'type': 'text', 'text': PROMPT},
+                    ],
+                }]
+                text = vl_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+                # Handle both old (2-tuple) and new (3-tuple with return_video_kwargs) API
+                if _HAS_VIDEO_KWARGS:
+                    image_inputs, video_inputs, video_kwargs = process_vision_info(
+                        messages, return_video_kwargs=True
+                    )
+                else:
+                    result = process_vision_info(messages)
+                    if len(result) == 3:
+                        image_inputs, video_inputs, video_kwargs = result
+                    else:
+                        image_inputs, video_inputs = result
+                        video_kwargs = {}
+
+                inputs = vl_processor(
+                    text=[text],
+                    images=image_inputs,
+                    videos=video_inputs,
+                    fps=VIDEO_FPS,
+                    padding=True,
+                    return_tensors='pt',
+                    **video_kwargs,
+                ).to(DEVICE)
+
+                with torch.no_grad():
+                    generated_ids = vl_model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+                trimmed = [out[len(inp):] for inp, out in zip(inputs.input_ids, generated_ids)]
+                output_text = vl_processor.batch_decode(trimmed, skip_special_tokens=True,
+                                                          clean_up_tokenization_spaces=False)[0]
+                cleaned = re.sub(r'^```(?:json)?\s*|\s*```$', '', output_text.strip(), flags=re.MULTILINE).strip()
+                try:
+                    return json.loads(cleaned)
+                except json.JSONDecodeError as e:
+                    return {'_parse_error': str(e), '_raw_output': output_text}
+
+            chunk_signals = []
+            if vl_model is not None:
+                print(f'Inferring {len(chunk_records)} chunks (fps={VIDEO_FPS}, max_pixels={VIDEO_MAX_PIXELS})...')
+                t0 = time.time()
+                for cr in chunk_records:
+                    cr_t0 = time.time()
+                    try:
+                        sig = _infer_chunk(cr['path'])
+                    except Exception as e:
+                        sig = {'_inference_error': f'{type(e).__name__}: {e}'}
+                    chunk_signals.append({
+                        'chunk_idx': cr['chunk_idx'],
+                        'start_sec': cr['start_sec'],
+                        'end_sec': cr['end_sec'],
+                        'inference_sec': round(time.time() - cr_t0, 2),
+                        'signal': sig,
+                    })
+                    elapsed = time.time() - cr_t0
+                    has_error = isinstance(sig, dict) and any(k.startswith('_') and 'error' in k for k in sig)
+                    status = 'ERROR' if has_error else 'OK'
+                    print(f'  chunk {cr["chunk_idx"]+1}/{len(chunk_records)} ({cr["start_sec"]:.0f}-{cr["end_sec"]:.0f}s) {status} in {elapsed:.1f}s')
+                print(f'Inference complete: {len(chunk_signals)} chunks in {time.time()-t0:.1f}s')
+            else:
+                print('VL model not loaded (EXTRACT_MODE=transcript) - chunk_signals empty')
+          metadata:
+            execution_start: 1780587178048
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: a1eeffad36a54a489437e13e9653063b
+          blockGroup: dfea1be59b004f59842e497e6d5a2494
+          sortingKey: "000026"
+          type: markdown
+          content: >-
+            ## §7 Transcript — sidecar OR Whisper fallback
+
+
+            If `SUBS_PATH` (set in §3) exists, parse it. Otherwise run Whisper locally on
+
+            the full video — works for local files (no YouTube auth needed). Whisper
+
+            model size is configurable (`base` default; `large-v3` for max quality).
+          metadata: {}
+        - id: c651552b7b374f7281de0628c37edcd6
+          blockGroup: 23e5e03e198047fbbdc55968966fe95a
+          sortingKey: "000027"
+          contentHash: 52ed3fda
+          executionCount: 21
+          executionFinishedAt: 2026-06-04T15:34:59.424000Z
+          executionStartedAt: 2026-06-04T15:32:58.107000Z
+          outputs:
+            - name: stdout
+              text: >+
+                No sidecar - running Whisper (base model) on BRUlSm4gdQ4.mp4...
+
+                100%|████████████████████████████████████████| 139M/139M [00:00<00:00, 494MiB/s]
+
+                Detected language: English
+                 99%|█████████▉| 438569/441569 [01:47<00:00, 4096.93frames/s]  Whisper: 405 segments, 54076 chars in 120.5s
+
+              output_type: stream
+          type: code
+          content: >-
+            # §7 — transcript extraction (sidecar OR Whisper)
+
+            transcript_text = ''
+
+            transcript_segments = []
+
+
+            if EXTRACT_MODE in ('transcript', 'both'):
+                if SUBS_PATH and SUBS_PATH.exists():
+                    raw = SUBS_PATH.read_text(errors='replace')
+                    suffix = SUBS_PATH.suffix.lower()
+                    if suffix == '.vtt' or '.vtt' in SUBS_PATH.name:
+                        block_re = re.compile(
+                            r'(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})[^\n]*\n(.*?)(?=\n\n|\Z)',
+                            re.DOTALL
+                        )
+                        def _ts_to_sec(s):
+                            h, m, rest = s.split(':')
+                            return int(h)*3600 + int(m)*60 + float(rest)
+                        for m in block_re.finditer(raw):
+                            seg_text = re.sub(r'<[^>]+>', '', m.group(3)).strip().replace('\n', ' ')
+                            if seg_text:
+                                transcript_segments.append({
+                                    'start_sec': _ts_to_sec(m.group(1)),
+                                    'end_sec': _ts_to_sec(m.group(2)),
+                                    'text': seg_text,
+                                })
+                                transcript_text += seg_text + ' '
+                    # SRT path similar but operators rarely use SRT - skip for brevity
+                    transcript_text = transcript_text.strip()
+                    print(f'sidecar transcript: {len(transcript_segments)} segments, {len(transcript_text)} chars')
+                else:
+                    # Whisper fallback
+                    try:
+                        import whisper
+                    except ImportError:
+                        _pip('openai-whisper')
+                        import whisper
+                    print(f'No sidecar - running Whisper ({WHISPER_MODEL_SIZE} model) on {VIDEO_PATH.name}...')
+                    t0 = time.time()
+                    whisper_model = whisper.load_model(WHISPER_MODEL_SIZE)
+                    result = whisper_model.transcribe(str(VIDEO_PATH), verbose=False)
+                    transcript_text = result['text'].strip()
+                    transcript_segments = [
+                        {'start_sec': seg['start'], 'end_sec': seg['end'], 'text': seg['text'].strip()}
+                        for seg in result.get('segments', [])
+                    ]
+                    print(f'  Whisper: {len(transcript_segments)} segments, {len(transcript_text)} chars in {time.time()-t0:.1f}s')
+            else:
+                print('EXTRACT_MODE excludes transcript - skipping')
+          metadata:
+            execution_start: 1780587178107
+            execution_millis: 121317
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: ee0cb4d3a40c42888670475b3bbfd7f0
+          blockGroup: 46254d7e928f422f9a92e02030dae564
+          sortingKey: "000028"
+          type: markdown
+          content: >-
+            ## §8 Aggregate — merge per-chunk outputs with provenance
+
+
+            Each item in each chunk's signal lists gets tagged with `_chunk_idx` +
+
+            `_chunk_start_sec` so downstream lesson-card drafting can trace any claim
+
+            back to the exact video timestamp where it originated.
+          metadata: {}
+        - id: bc8a00d1b60444de9e158feb94f9e4f8
+          blockGroup: d5024f9a609e4d309763367732a74dbd
+          sortingKey: "000029"
+          contentHash: b3e88b23
+          executionCount: 22
+          executionFinishedAt: 2026-06-04T15:34:59.478000Z
+          executionStartedAt: 2026-06-04T15:34:59.478000Z
+          outputs:
+            - name: stdout
+              text: >
+                Aggregate: 0/15 chunks contributed signal
+                  concepts_taught: 0
+                  patterns_named: 0
+                  formulas_or_math: 0
+                  filters_or_scanners: 0
+                  code_or_pseudocode: 0
+                  key_quotes: 0
+                  actionable_for_agent: 0
+                  risk_warnings: 0
+              output_type: stream
+          type: code
+          content: >-
+            # §8 — aggregate with provenance tagging
+
+            from collections import Counter, defaultdict
+
+
+            agg = {
+                'segment_count':         len(chunk_signals),
+                'segments_with_signal':  sum(1 for cs in chunk_signals if isinstance(cs.get('signal'), dict) and not any(k.startswith('_') for k in cs['signal'])),
+                'concepts_taught':       [],
+                'patterns_named':        [],
+                'formulas_or_math':      [],
+                'filters_or_scanners':   [],
+                'code_or_pseudocode':    [],
+                'key_quotes':            [],
+                'actionable_for_agent':  [],
+                'visual_examples':       [],
+                'prerequisites_referenced': [],
+                'risk_warnings':         [],
+                'segment_summaries':     [],
+            }
+
+
+            _FIELD_MAP = {
+                'concepts':                  'concepts_taught',
+                'patterns_named':            'patterns_named',
+                'formulas_or_math':          'formulas_or_math',
+                'filters_or_scanners':       'filters_or_scanners',
+                'code_or_pseudocode':        'code_or_pseudocode',
+                'key_quotes':                'key_quotes',
+                'actionable_for_agent':      'actionable_for_agent',
+                'visual_examples_described': 'visual_examples',
+                'prerequisites_referenced':  'prerequisites_referenced',
+                'risk_warnings':             'risk_warnings',
+            }
+
+
+            for cs in chunk_signals:
+                sig = cs.get('signal', {})
+                if not isinstance(sig, dict) or any(k.startswith('_') for k in sig):
+                    continue
+                if sig.get('segment_summary'):
+                    agg['segment_summaries'].append({
+                        'chunk_idx': cs['chunk_idx'],
+                        'start_sec': cs['start_sec'],
+                        'end_sec':   cs['end_sec'],
+                        'summary':   sig['segment_summary'],
+                    })
+                for src_field, dst_field in _FIELD_MAP.items():
+                    items = sig.get(src_field, []) or []
+                    for item in items:
+                        entry = dict(item) if isinstance(item, dict) else {'value': item}
+                        entry['_chunk_idx'] = cs['chunk_idx']
+                        entry['_chunk_start_sec'] = cs['start_sec']
+                        agg[dst_field].append(entry)
+
+            print(f'Aggregate: {agg["segments_with_signal"]}/{len(chunk_signals)} chunks contributed signal')
+
+            for k in ['concepts_taught', 'patterns_named', 'formulas_or_math', 'filters_or_scanners',
+                      'code_or_pseudocode', 'key_quotes', 'actionable_for_agent', 'risk_warnings']:
+                print(f'  {k}: {len(agg[k])}')
+          metadata:
+            execution_start: 1780587299478
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+        - id: c49987850184449b90f1d87fa99b04f0
+          blockGroup: 3847083367cc4cf39088fbef60df2cbb
+          sortingKey: "000030"
+          type: markdown
+          content: >-
+            ## §9 Write output JSON
+
+
+            Final output written to `OUTPUT_PATH`. Schema version 2 distinguishes this
+
+            from v1 per-frame outputs. The `chunks` array replaces v1's `frames` array;
+
+            the per-chunk `signal` is the temporally-aware structured response from Qwen.
+          metadata: {}
+        - id: 82693c5195c8494eafa3f1cabdbceb99
+          blockGroup: 966a9060e0434ac68aa4c0bf04ee3aef
+          sortingKey: "000031"
+          contentHash: 38826f05
+          executionCount: 23
+          executionFinishedAt: 2026-06-04T15:35:00.324000Z
+          executionStartedAt: 2026-06-04T15:34:59.537000Z
+          outputs:
+            - name: stdout
+              text: >
+                Wrote /datasets/_deepnote_work/work/output.json (145.9 KB)
+                  schema_version: 2, inference_mode: native_video
+                  chunks_analyzed: 15
+                  transcript chars: 54076
+              output_type: stream
+          type: code
+          content: >-
+            # §9 — write output JSON
+
+            source_prefix = 'local' if is_local else ('youtube' if 'youtu' in VIDEO_URL else 'url')
+
+
+            output = {
+                'schema_version':       2,
+                'inference_mode':       'native_video',
+                'source':               f'{source_prefix}/{VIDEO_ID}',
+                'source_url':           VIDEO_URL,
+                'title':                title,
+                'uploader':             uploader,
+                'duration_sec':         duration_sec,
+                'extracted_at':         datetime.now(timezone.utc).isoformat(),
+                'extract_mode':         EXTRACT_MODE,
+                'model':                MODEL,
+                'prompt_profile':       PROMPT_PROFILE,
+                'chunk_duration_sec':   CHUNK_DURATION_SEC,
+                'video_fps':            VIDEO_FPS,
+                'video_max_pixels':     VIDEO_MAX_PIXELS,
+                'chunks_analyzed':      len(chunk_signals),
+                'transcript': {
+                    'text':          transcript_text,
+                    'segments':      transcript_segments,
+                    'segment_count': len(transcript_segments),
+                    'char_count':    len(transcript_text),
+                },
+                'aggregate': agg,
+                'chunks':    chunk_signals,
+            }
+
+
+            OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+            OUTPUT_PATH.write_text(json.dumps(output, indent=2, default=str))
+
+            size_kb = OUTPUT_PATH.stat().st_size / 1024
+
+            print(f'Wrote {OUTPUT_PATH} ({size_kb:.1f} KB)')
+
+            print(f'  schema_version: 2, inference_mode: native_video')
+
+            print(f'  chunks_analyzed: {len(chunk_signals)}')
+
+            print(f'  transcript chars: {len(transcript_text)}')
+          metadata:
+            execution_start: 1780587299537
+            execution_millis: 787
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+      executionMode: block
+      id: 026a4729bc8b4fd0a9cb2549765a8754
+      isModule: false
+      name: memory_oracle/notebooks/video-ingestion/video-ingestion-qwen25vl-v2
+      workingDirectory: memory_oracle/notebooks/video-ingestion
+version: 1.0.0
