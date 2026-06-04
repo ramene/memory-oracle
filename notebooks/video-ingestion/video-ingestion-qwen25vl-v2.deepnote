@@ -1,6 +1,6 @@
 metadata:
   createdAt: 2026-06-04T12:55:46.458000Z
-  modifiedAt: '2026-06-04T16:21:27.401088Z'
+  modifiedAt: '2026-06-04T16:24:05.029401Z'
 project:
   id: ae2b2f17-fb74-43bf-a749-b5a5b8a163c8
   integrations:
@@ -974,11 +974,24 @@ project:
           type: code
           content: |-
             # §6 — per-chunk native-video inference (defensive against qwen-vl-utils version drift)
+            # Force decord backend BEFORE process_vision_info import — torchvision fallback is broken
+            # in torch>=2.0 (torchvision.io.read_video removed). decord is the fast, stable path.
+            import os
+            os.environ.setdefault('FORCE_QWENVL_VIDEO_READER', 'decord')
+
+            try:
+                import decord  # noqa: F401 — required by qwen-vl-utils video backend
+            except ImportError:
+                import subprocess, sys
+                subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'decord'], check=True)
+                import decord  # noqa: F401
+
             from qwen_vl_utils import process_vision_info
             import inspect
 
             _PVI_SIG = inspect.signature(process_vision_info)
             _HAS_VIDEO_KWARGS = 'return_video_kwargs' in _PVI_SIG.parameters
+            print(f'video backend: {os.environ.get("FORCE_QWENVL_VIDEO_READER", "auto")}, decord: {decord.__version__}')
             print(f'process_vision_info supports return_video_kwargs: {_HAS_VIDEO_KWARGS}')
 
             def _infer_chunk(chunk_path):
