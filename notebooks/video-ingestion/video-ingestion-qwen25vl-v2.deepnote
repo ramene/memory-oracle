@@ -1,6 +1,6 @@
 metadata:
   createdAt: 2026-06-04T12:55:46.458000Z
-  modifiedAt: '2026-06-04T16:24:05.029401Z'
+  modifiedAt: '2026-06-04T17:17:51.724846Z'
 project:
   id: ae2b2f17-fb74-43bf-a749-b5a5b8a163c8
   integrations:
@@ -1005,28 +1005,37 @@ project:
                 }]
                 text = vl_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
-                # Handle both old (2-tuple) and new (3-tuple with return_video_kwargs) API
+                # Two distinct API paths — fps source differs to avoid duplicate kwarg
                 if _HAS_VIDEO_KWARGS:
+                    # NEW path: video_kwargs carries fps (and second_per_grid_ts); do NOT pass fps explicitly
                     image_inputs, video_inputs, video_kwargs = process_vision_info(
                         messages, return_video_kwargs=True
                     )
+                    inputs = vl_processor(
+                        text=[text],
+                        images=image_inputs,
+                        videos=video_inputs,
+                        padding=True,
+                        return_tensors='pt',
+                        **video_kwargs,
+                    ).to(DEVICE)
                 else:
+                    # LEGACY path: video_kwargs absent or empty; pass fps explicitly
                     result = process_vision_info(messages)
                     if len(result) == 3:
                         image_inputs, video_inputs, video_kwargs = result
                     else:
                         image_inputs, video_inputs = result
                         video_kwargs = {}
-
-                inputs = vl_processor(
-                    text=[text],
-                    images=image_inputs,
-                    videos=video_inputs,
-                    fps=VIDEO_FPS,
-                    padding=True,
-                    return_tensors='pt',
-                    **video_kwargs,
-                ).to(DEVICE)
+                    inputs = vl_processor(
+                        text=[text],
+                        images=image_inputs,
+                        videos=video_inputs,
+                        fps=VIDEO_FPS,
+                        padding=True,
+                        return_tensors='pt',
+                        **video_kwargs,
+                    ).to(DEVICE)
 
                 with torch.no_grad():
                     generated_ids = vl_model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
