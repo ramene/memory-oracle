@@ -1,6 +1,6 @@
 metadata:
   createdAt: 2026-06-04T12:55:46.458000Z
-  modifiedAt: '2026-06-04T16:03:27.477602Z'
+  modifiedAt: '2026-06-04T16:21:27.401088Z'
 project:
   id: ae2b2f17-fb74-43bf-a749-b5a5b8a163c8
   integrations:
@@ -347,15 +347,23 @@ project:
             # Install all deps unconditionally — Deepnote TensorFlow base image lacks several.
             # CRITICAL: qwen-vl-utils[decord]>=0.0.8 — decord is the fast video decoder; 0.0.8+
             # adds return_video_kwargs support needed for native video mode.
-            # --force-reinstall on qwen-vl-utils bypasses any base-image upper bound.
+            # Two-step install:
+            #   1) Regular deps INCLUDING decord (so the decord extra actually installs)
+            #   2) --force-reinstall --no-deps on qwen-vl-utils to bypass any base-image upper
+            #      bound (some sibling pin overrides --upgrade alone on TF base image)
             !apt-get update -qq && apt-get install -y -qq ffmpeg
-            !pip install -q --upgrade yt-dlp 'transformers>=4.49' 'accelerate>=0.34' 'bitsandbytes>=0.43' pillow einops sentencepiece torchvision openai-whisper
-            !pip install -q --force-reinstall --no-deps 'qwen-vl-utils[decord]>=0.0.8'
+            !pip install -q --upgrade yt-dlp 'transformers>=4.49' 'accelerate>=0.34' 'bitsandbytes>=0.43' decord pillow einops sentencepiece torchvision openai-whisper
+            !pip install -q --force-reinstall --no-deps 'qwen-vl-utils>=0.0.8'
 
-            # Verify the install — print version + signature so we catch regressions early
+            # Verify — print version + signature + decord presence so we catch regressions early
             import qwen_vl_utils, inspect
             print(f'qwen-vl-utils version: {getattr(qwen_vl_utils, "__version__", "unknown")}')
             print(f'process_vision_info signature: {inspect.signature(qwen_vl_utils.process_vision_info)}')
+            try:
+                import decord
+                print(f'decord: {decord.__version__} ✓ (fast video path)')
+            except ImportError:
+                print('decord: MISSING — video loading will fall back to slow per-frame ffmpeg')
           metadata:
             execution_start: 1780587065458
             execution_millis: 8180
