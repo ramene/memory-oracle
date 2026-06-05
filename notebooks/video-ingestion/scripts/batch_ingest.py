@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -314,8 +315,60 @@ def poll_until_terminal(token: str, run_id: str, label: str = "",
         time.sleep(poll_interval)
 
 
-def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict) -> None:
-    """Submit one video to Deepnote, block until done (synchronous mode)."""
+def auto_upload_to_drive(video: Video, drive_path: Path) -> bool:
+    """Copy mp4 from local ~/Downloads/upload/ into a Drive-synced folder
+    that Deepnote sees via its `work` integration. Returns True if file already
+    in Drive or copy succeeded."""
+    drive_target = drive_path / f"{video.youtube_id}.mp4"
+    if drive_target.exists() and drive_target.stat().st_size > 0:
+        log(f"[{video.youtube_id}] already in Drive at {drive_target} — skipping upload", indent=1)
+        return True
+    if not video.mp4_path.exists():
+        log(f"[{video.youtube_id}] cannot auto-upload: local mp4 missing at {video.mp4_path}", indent=1)
+        return False
+    log(f"[{video.youtube_id}] auto-uploading to Drive: {drive_target}", indent=1)
+    drive_path.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(str(video.mp4_path), str(drive_target))
+    log(f"[{video.youtube_id}] copied to Drive — Deepnote sync takes ~30-60s", indent=1)
+    return True
+
+
+def auto_download_from_drive(video: Video, drive_path: Path,
+                               max_wait_seconds: int = 300) -> bool:
+    """Poll for output.json in the Drive folder, then copy back to local
+    ~/Downloads/upload/. Returns True if file found + copied within max_wait."""
+    drive_source = drive_path / f"{video.youtube_id}-output.json"
+    if video.output_path.exists() and video.output_path.stat().st_size > 0:
+        log(f"[{video.youtube_id}] output.json already local — skipping download", indent=1)
+        return True
+    log(f"[{video.youtube_id}] watching Drive for output.json at {drive_source} (max {max_wait_seconds}s)", indent=1)
+    t0 = time.time()
+    while time.time() - t0 < max_wait_seconds:
+        if drive_source.exists() and drive_source.stat().st_size > 0:
+            shutil.copy2(str(drive_source), str(video.output_path))
+            elapsed = time.time() - t0
+            log(f"[{video.youtube_id}] auto-downloaded after {elapsed:.0f}s → {video.output_path}", indent=1)
+            return True
+        time.sleep(5)
+    log(f"[{video.youtube_id}] WARN: output.json not in Drive after {max_wait_seconds}s — manual download required", indent=1)
+    return False
+
+
+def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
+                  drive_path: Path | None = None) -> None:
+    """Submit one video to Deepnote, block until done (synchronous mode).
+    If drive_path is set, auto-uploads to Drive before submission and
+    auto-downloads output.json from Drive after success."""
+    # Auto-upload to Drive if configured
+    if drive_path is not None:
+        if not auto_upload_to_drive(video, drive_path):
+            video.status = "error"
+            video.error = "auto-upload to Drive failed (local mp4 missing)"
+            return
+        # Give Drive sync a moment before submitting
+        log(f"[{video.youtube_id}] waiting 30s for Drive→Deepnote sync before submission", indent=1)
+        time.sleep(30)
+
     if not video.mp4_path or not video.mp4_path.exists():
         video.status = "error"
         video.error = f"mp4 not found at {video.mp4_path} — was it uploaded to Deepnote work folder?"
@@ -358,6 +411,9 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict)
     if run_status == "success":
         video.status = "success"
         log(f"[{video.youtube_id}] SUCCESS in {total_elapsed:.0f}s — output should be at {DRIVE_WORK_PATH}/{video.youtube_id}-output.json", indent=1)
+        # Auto-download from Drive if configured
+        if drive_path is not None:
+            auto_download_from_drive(video, drive_path)
     elif run_status in ("error", "failed"):
         video.status = "error"
         video.error = error_detail or "Deepnote reported error (no detail)"
@@ -367,19 +423,24 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict)
         log(f"[{video.youtube_id}] non-terminal status={video.status} after {total_elapsed:.0f}s (poll timeout?)", indent=1)
 
 
-def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict) -> None:
+def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
+                  drive_path: Path | None = None) -> None:
     log(f"=== PHASE 2: ingest — {len(videos)} videos via Deepnote v2 API ===")
     log(f"Notebook: {notebook_id}")
     log(f"Default inputs: {DEFAULT_INPUTS}")
     if extra_inputs:
         log(f"Overrides: {extra_inputs}")
+    if drive_path is not None:
+        log(f"Drive sync ENABLED — auto-upload/download via {drive_path}")
+    else:
+        log(f"Drive sync DISABLED — manual upload/download required (see phase output for instructions)")
     log("")
     token = load_token()
     t0 = time.time()
     ok = err = 0
     for i, video in enumerate(videos, 1):
         log(f"--- Video {i}/{len(videos)}: {video.youtube_id} ---")
-        ingest_video(token, notebook_id, video, extra_inputs)
+        ingest_video(token, notebook_id, video, extra_inputs, drive_path)
         if video.status == "success":
             ok += 1
         elif video.status == "error":
@@ -388,10 +449,14 @@ def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict) -> N
     log("")
     log(f"=== Ingest phase complete: {ok} success, {err} error, {len(videos) - ok - err} other ({elapsed:.0f}s total) ===")
     log("")
-    log(f"NEXT MANUAL STEP:")
-    log(f"  Drag *-output.json files from Deepnote 'work' folder back to {UPLOAD_DIR}/")
-    log("")
-    log(f"Then run:  ./batch_ingest.py summary {sys.argv[-1]}")
+    if drive_path is None:
+        log(f"NEXT MANUAL STEP:")
+        log(f"  Drag *-output.json files from Deepnote 'work' folder back to {UPLOAD_DIR}/")
+        log("")
+        log(f"Then run:  ./batch_ingest.py summary {sys.argv[-1]}")
+    else:
+        log(f"All output.json files auto-downloaded from Drive to {UPLOAD_DIR}/")
+        log(f"Run summary directly:  ./batch_ingest.py summary {sys.argv[-1]}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -462,7 +527,16 @@ def main():
                    help="yt-dlp format spec (default: best[height<=360][ext=mp4])")
     p.add_argument("--input", action="append", default=[], metavar="KEY=VALUE",
                    help="Override a Deepnote input block (e.g. --input CHUNK_DURATION_SEC=600). Can be repeated.")
+    p.add_argument("--drive-path", default=os.environ.get("DEEPNOTE_DRIVE_PATH"),
+                   help=("Local path to the Deepnote 'work' folder via Google Drive Desktop mount "
+                         "(e.g. ~/Library/CloudStorage/GoogleDrive-you@gmail.com/My\\ Drive/deepnote-work). "
+                         "When set, the ingest phase auto-uploads mp4 to Drive (Deepnote sees it via "
+                         "Drive integration sync ~30-60s later) AND auto-downloads output.json back. "
+                         "Eliminates the two manual drag-drop sync steps. Alternative: set "
+                         "DEEPNOTE_DRIVE_PATH env var. For rclone-only setups (no Drive Desktop), "
+                         "point this at a local staging dir and add `rclone sync` cron alongside."))
     args = p.parse_args()
+    drive_path = Path(os.path.expanduser(args.drive_path)) if args.drive_path else None
 
     # phase=wait short-circuits — urls_file is interpreted as a runId
     if args.phase == "wait":
@@ -513,14 +587,16 @@ def main():
     if args.phase == "download":
         phase_download(videos, args.format)
     elif args.phase == "ingest":
-        phase_ingest(videos, args.notebook_id, extra_inputs)
+        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path)
     elif args.phase == "summary":
         phase_summary(videos)
     elif args.phase == "all":
         phase_download(videos, args.format)
-        input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
-        phase_ingest(videos, args.notebook_id, extra_inputs)
-        input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
+        if drive_path is None:
+            input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
+        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path)
+        if drive_path is None:
+            input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
         phase_summary(videos)
 
 
