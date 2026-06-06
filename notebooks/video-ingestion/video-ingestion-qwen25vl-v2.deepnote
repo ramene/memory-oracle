@@ -1401,81 +1401,68 @@ project:
           executionCount: 22
           executionFinishedAt: 2026-06-04T15:34:59.478000Z
           executionStartedAt: 2026-06-04T15:34:59.478000Z
-          outputs:
-            - name: stdout
-              text: >
-                Aggregate: 0/15 chunks contributed signal
-                  concepts_taught: 0
-                  patterns_named: 0
-                  formulas_or_math: 0
-                  filters_or_scanners: 0
-                  code_or_pseudocode: 0
-                  key_quotes: 0
-                  actionable_for_agent: 0
-                  risk_warnings: 0
-              output_type: stream
+          outputs: []
           type: code
-          content: >-
-            # §8 — aggregate with provenance tagging
+          content: |-
+            # §8 — aggregate (schema-agnostic) with provenance tagging
+            # Collects EVERY field from every chunk's signal dict regardless of profile
+            # schema. Replaces the previous hardcoded trading-education _FIELD_MAP which
+            # silently emptied for any other profile (e.g. ai-systems-research run on
+            # AlphaProof Nexus where per-chunk signal was rich but aggregate was hollow).
+            #
+            # Each aggregated entry carries _chunk_idx + _chunk_start_sec provenance:
+            #   - list-valued chunk fields  → append each item with provenance tags
+            #   - scalar/dict-valued fields → wrap as {value: ..., _chunk_idx, _chunk_start_sec}
+            #   - fields starting with '_'  → skipped (error markers like _inference_error)
+            #   - empty values              → skipped (no noise in the aggregate)
+            #
+            # Always-emitted keys: segment_count, segments_with_signal, fields_observed.
+            # All other keys reflect whatever the active prompt profile produced.
 
-            from collections import Counter, defaultdict
-
+            from collections import defaultdict
 
             agg = {
-                'segment_count':         len(chunk_signals),
-                'segments_with_signal':  sum(1 for cs in chunk_signals if isinstance(cs.get('signal'), dict) and not any(k.startswith('_') for k in cs['signal'])),
-                'concepts_taught':       [],
-                'patterns_named':        [],
-                'formulas_or_math':      [],
-                'filters_or_scanners':   [],
-                'code_or_pseudocode':    [],
-                'key_quotes':            [],
-                'actionable_for_agent':  [],
-                'visual_examples':       [],
-                'prerequisites_referenced': [],
-                'risk_warnings':         [],
-                'segment_summaries':     [],
+                'segment_count':        len(chunk_signals),
+                'segments_with_signal': sum(
+                    1 for cs in chunk_signals
+                    if isinstance(cs.get('signal'), dict)
+                    and not any(k.startswith('_') for k in cs['signal'])
+                ),
+                'fields_observed':      [],
             }
 
-
-            _FIELD_MAP = {
-                'concepts':                  'concepts_taught',
-                'patterns_named':            'patterns_named',
-                'formulas_or_math':          'formulas_or_math',
-                'filters_or_scanners':       'filters_or_scanners',
-                'code_or_pseudocode':        'code_or_pseudocode',
-                'key_quotes':                'key_quotes',
-                'actionable_for_agent':      'actionable_for_agent',
-                'visual_examples_described': 'visual_examples',
-                'prerequisites_referenced':  'prerequisites_referenced',
-                'risk_warnings':             'risk_warnings',
-            }
-
+            _collected = defaultdict(list)
 
             for cs in chunk_signals:
                 sig = cs.get('signal', {})
-                if not isinstance(sig, dict) or any(k.startswith('_') for k in sig):
+                if not isinstance(sig, dict):
                     continue
-                if sig.get('segment_summary'):
-                    agg['segment_summaries'].append({
-                        'chunk_idx': cs['chunk_idx'],
-                        'start_sec': cs['start_sec'],
-                        'end_sec':   cs['end_sec'],
-                        'summary':   sig['segment_summary'],
-                    })
-                for src_field, dst_field in _FIELD_MAP.items():
-                    items = sig.get(src_field, []) or []
-                    for item in items:
-                        entry = dict(item) if isinstance(item, dict) else {'value': item}
-                        entry['_chunk_idx'] = cs['chunk_idx']
-                        entry['_chunk_start_sec'] = cs['start_sec']
-                        agg[dst_field].append(entry)
+                if any(k.startswith('_') for k in sig):
+                    continue
+
+                prov = {'_chunk_idx': cs['chunk_idx'], '_chunk_start_sec': cs['start_sec']}
+
+                for field_name, value in sig.items():
+                    if field_name.startswith('_'):
+                        continue
+                    if value is None or value == '' or value == [] or value == {}:
+                        continue
+                    if isinstance(value, list):
+                        for item in value:
+                            entry = dict(item) if isinstance(item, dict) else {'value': item}
+                            entry.update(prov)
+                            _collected[field_name].append(entry)
+                    else:
+                        _collected[field_name].append({'value': value, **prov})
+
+            for field_name, items in _collected.items():
+                agg[field_name] = items
+            agg['fields_observed'] = sorted(_collected.keys())
 
             print(f'Aggregate: {agg["segments_with_signal"]}/{len(chunk_signals)} chunks contributed signal')
-
-            for k in ['concepts_taught', 'patterns_named', 'formulas_or_math', 'filters_or_scanners',
-                      'code_or_pseudocode', 'key_quotes', 'actionable_for_agent', 'risk_warnings']:
-                print(f'  {k}: {len(agg[k])}')
+            print(f'  fields observed ({len(agg["fields_observed"])}):')
+            for k in agg['fields_observed']:
+                print(f'    {k}: {len(_collected[k])}')
           metadata:
             execution_start: 1780587299478
             execution_millis: 0
