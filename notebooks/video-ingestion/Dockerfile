@@ -31,18 +31,26 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# System deps. Python 3.11 = Deepnote default kernel.
+# System deps. Python 3.11 from deadsnakes PPA — Ubuntu 22.04's apt-shipped
+# python3.11 is the 3.11.0~rc1 pre-release which lacks sys.get_int_max_str_digits
+# and other 3.11.0-final features PyTorch 2.12+ assumes are present. Without
+# deadsnakes, `import torch._dynamo` fails with AttributeError at module load.
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        python3.11 python3.11-dev python3.11-venv \
-        python3-pip \
+        software-properties-common \
+        ca-certificates \
+        curl \
+        && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        python3.11 python3.11-dev python3.11-venv python3.11-distutils \
         ffmpeg \
         git \
-        curl \
-        ca-certificates \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 && \
     ln -sf /usr/bin/python3.11 /usr/local/bin/python && \
     ln -sf /usr/bin/python3.11 /usr/local/bin/python3 && \
     python -m pip install --upgrade pip setuptools wheel
