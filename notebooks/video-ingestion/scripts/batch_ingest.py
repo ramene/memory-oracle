@@ -527,6 +527,16 @@ def main():
                    help="yt-dlp format spec (default: best[height<=360][ext=mp4])")
     p.add_argument("--input", action="append", default=[], metavar="KEY=VALUE",
                    help="Override a Deepnote input block (e.g. --input CHUNK_DURATION_SEC=600). Can be repeated.")
+    p.add_argument("--profile", default=None,
+                   help=("Shorthand for --input PROMPT_PROFILE=<name>. Selects a prompt profile from "
+                         "the inline library in Cell 14 of the notebook (or matching disk YAML at "
+                         "notebooks/video-ingestion/prompt-profiles/<name>.yaml). Common values: "
+                         "ai-systems-research, paper-author-talk, coding-tutorial, product-announcement, "
+                         "trading-education, trading-intelligence, general-summary."))
+    p.add_argument("--override-prompt", default=None, metavar="PATH",
+                   help=("Read prompt body from PATH and pass as --input PROMPT_OVERRIDE=<content>. "
+                         "Bypasses the profile lookup entirely. Use for one-off experiments without "
+                         "committing a new profile. Use '-' to read from stdin."))
     p.add_argument("--drive-path", default=os.environ.get("DEEPNOTE_DRIVE_PATH"),
                    help=("Local path to the Deepnote 'work' folder via Google Drive Desktop mount "
                          "(e.g. ~/Library/CloudStorage/GoogleDrive-you@gmail.com/My\\ Drive/deepnote-work). "
@@ -572,6 +582,25 @@ def main():
             sys.exit(f"FATAL: --input expects KEY=VALUE, got: {kv}")
         k, v = kv.split("=", 1)
         extra_inputs[k] = v
+
+    # --profile shorthand → --input PROMPT_PROFILE=<name>
+    if args.profile:
+        extra_inputs["PROMPT_PROFILE"] = args.profile
+
+    # --override-prompt → read body, --input PROMPT_OVERRIDE=<content>
+    if args.override_prompt:
+        if args.override_prompt == "-":
+            prompt_body = sys.stdin.read()
+        else:
+            prompt_path = Path(args.override_prompt).expanduser()
+            if not prompt_path.exists():
+                sys.exit(f"FATAL: --override-prompt path not found: {prompt_path}")
+            prompt_body = prompt_path.read_text()
+        prompt_body = prompt_body.strip()
+        if not prompt_body:
+            sys.exit(f"FATAL: --override-prompt body is empty")
+        extra_inputs["PROMPT_OVERRIDE"] = prompt_body
+        log(f"--override-prompt loaded {len(prompt_body)} chars (bypasses PROMPT_PROFILE)")
 
     log(f"=== batch_ingest.py — phase={args.phase} ===")
     log(f"urls file:     {urls_path}")

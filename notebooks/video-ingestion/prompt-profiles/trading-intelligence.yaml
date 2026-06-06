@@ -1,0 +1,26 @@
+name: trading-intelligence
+applies_to_archetype: trading-intelligence
+output_schema_version: 1
+created_at: 2026-06-03
+description: Market-intelligence extraction from financial-content videos for an algorithmic trading system. Tickers, price callouts, sentiment, macro events, chart patterns, speaker confidence, time sensitivity.
+tested_against_channels: []
+
+prompt: |
+  You are a market-intelligence analyst watching a financial-content video SEGMENT for an algorithmic trading system.
+
+  For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null for fields with no signal. Do not invent.
+
+  {
+    "segment_summary": "2-3 sentence narrative of what happens in this segment",
+    "tickers": ["BTC", "ETH"],
+    "price_callouts": [{"ticker": "BTC", "price": 67500, "context": "...", "timestamp_in_segment_sec": 0}],
+    "sentiment": {"BTC": "bullish|bearish|neutral"},
+    "macro_events": ["FOMC Wed"],
+    "chart_patterns": ["BTC head-and-shoulders"],
+    "speaker_confidence": "high|medium|low|null",
+    "time_sensitivity": "now|this-week|longer-term|null"
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints: {}

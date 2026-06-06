@@ -1,0 +1,48 @@
+name: paper-author-talk
+applies_to_archetype: paper-author-talk
+output_schema_version: 1
+created_at: 2026-06-05
+description: Conference talks (NeurIPS, ICML, ICLR) by the paper's authors themselves. Slides are content; Q&A reveals what's NOT in the paper; author motivation differs from third-party explainer framing.
+tested_against_channels: []
+
+prompt: |
+  You are a research analyst extracting structured signal from a SEGMENT of a conference talk (NeurIPS, ICML, ICLR, paper-author guest spots) given BY THE PAPER'S AUTHOR. This is different from an explainer video: the slides ARE the content, Q&A reveals what's NOT in the paper, author motivation is authoritative, and frontier admissions ("we don't know yet") are gold for honest framing. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+  For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+  {
+    "segment_summary": "3-5 sentence narrative of what was presented/discussed in this segment, in the speaker's own framing",
+    "slide_text_visible": [
+      {"slide_title_or_section": "Method overview", "key_bullets": ["bullet 1 verbatim from slide", "bullet 2"], "diagrams_shown": "what the slide visually depicts", "timestamp_in_segment_sec": 0}
+    ],
+    "author_motivation": "why the author says they pursued this work — verbatim or close paraphrase. The 'why' the paper buries in the intro.",
+    "key_method_claims": [
+      {"claim": "verbatim or paraphrased claim about how the method works", "evidence_provided_in_talk": "what slide / result they show to back the claim", "timestamp_in_segment_sec": 0}
+    ],
+    "quantitative_results": [
+      {"value": "headline number stated", "context": "what's being measured + against what baseline", "timestamp_in_segment_sec": 0}
+    ],
+    "frontier_admissions": [
+      {"admission": "what the author says doesn't yet work / is unsolved / is open", "stakes": "why this admission matters", "timestamp_in_segment_sec": 0}
+    ],
+    "qa_exchanges": [
+      {"question_paraphrased": "what the audience member asked", "answer_paraphrased": "what the author responded", "reveals_what": "what this exchange shows about the work that the paper itself doesn't say", "timestamp_in_segment_sec": 0}
+    ],
+    "future_work_hints": ["next-step directions the author drops in passing"],
+    "comparisons_to_prior_work": [
+      {"prior_work": "named paper / system", "stated_relationship": "how the author positions this work vs that one", "timestamp_in_segment_sec": 0}
+    ],
+    "audience_reactions": ["laughs / surprised reactions / pushbacks that signal where the talk lands or doesn't"],
+    "key_quotes": [
+      {"quote": "verbatim memorable line worth citing", "timestamp_in_segment_sec": 0, "why_quotable": "first-person author claim, frontier admission, or surprising framing"}
+    ],
+    "actionable_for_researcher": ["things a researcher in adjacent fields should DO with this — read the paper, reproduce X, compare against Y"],
+    "unanswered_questions": ["questions raised in Q&A that didn't get full answers — or that the author punted"]
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints:
+  "Google DeepMind":
+    note: |
+      Official DeepMind channel. Speakers often have institutional gravitas — capture their exact phrasing, especially for frontier_admissions. DeepMind talks tend to acknowledge limitations more openly than press releases — surface those verbatim.

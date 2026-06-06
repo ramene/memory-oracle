@@ -17,65 +17,42 @@ project:
           blockGroup: d3d3577a4de94c759252e3c8e5463f06
           sortingKey: "000000"
           type: markdown
-          content: >-
+          content: |-
             # mae — video ingestion v2 via Qwen2.5-VL (NATIVE VIDEO MODE)
 
-
             **Per Task #92** (2026-06-03). Replaces v1 per-frame inference with native video input —
-
             Qwen2.5-VL processes each video chunk as a single temporally-aware sequence
-
             (motion, narrative arc, event localization preserved).
-
 
             ## Pipeline
 
-
             `yt-dlp` (or local file or gdrive) → ffmpeg chunking (`CHUNK_DURATION_SEC` each) →
-
             **Qwen2.5-VL with `{type: video, ...}` input per chunk** → per-chunk structured JSON
-
             → aggregate (provenance-anchored) → `OUTPUT_PATH`.
-
 
             ## Why native video mode (vs v1 per-frame)
 
-
             Qwen2.5-VL's model card: *"Qwen2.5-VL can comprehend videos of over 1 hour, with the
-
             ability of capturing event by pinpointing the relevant video segments."* Per-frame mode
-
             throws away motion, sequence, and narrative — exactly what curriculum building needs.
-
 
             ## Parameters (Deepnote input blocks — must be declared in UI)
 
-
             - `VIDEO_URL` — local path, YouTube URL, or direct https URL
-
             - `EXTRACT_MODE` — `frames` | `transcript` | `both`
-
             - `CHUNK_DURATION_SEC` — segment length (default 600 = 10 min)
-
             - `VIDEO_FPS` — sample fps per chunk (default 1.0; raise for dense visual content)
-
             - `VIDEO_MAX_PIXELS` — per-frame pixel budget (default 360*420 = 151200)
-
             - `MODEL` — `Qwen/Qwen2.5-VL-7B-Instruct` (override to `-3B` on small GPUs)
-
-            - `PROMPT_PROFILE` — `trading-education` (default) | `trading-intelligence` | `general-summary`
-
+            - `PROMPT_PROFILE` — `trading-education` (default) | `trading-intelligence` | `general-summary` | `ai-systems-research` | `paper-author-talk` | `coding-tutorial` | `product-announcement` (see `prompt-profiles/` directory)
             - `OUTPUT_PATH` — where the result lands (prefer `/datasets/_deepnote_work/work/output.json` on Deepnote)
-
             - `MAX_NEW_TOKENS` — per-chunk output cap (default 2048)
-
 
             ## Output schema (`schema_version: 2`)
 
-
             Same envelope shape as v1 but `frames` array replaced by `chunks` array; each chunk's
-
             `signal` is one rich temporally-aware structured response, not 30 isolated stills.
+            - `PROMPT_OVERRIDE` — OPTIONAL. Paste a custom prompt to bypass PROMPT_PROFILE entirely (one-off experiments)
           metadata: {}
         - id: 21d92817d5b54825868d6477215a8940
           blockGroup: f1ddbd72ca454a2f95f60d2ba9102fde
@@ -177,12 +154,38 @@ project:
               - trading-education
               - trading-intelligence
               - general-summary
+              - ai-systems-research
+              - paper-author-talk
+              - coding-tutorial
+              - product-announcement
             deepnote_variable_custom_options:
               - trading-education
               - trading-intelligence
               - general-summary
+              - ai-systems-research
+              - paper-author-talk
+              - coding-tutorial
+              - product-announcement
             deepnote_variable_selected_variable: ""
             deepnote_variable_select_type: from-options
+        - id: 0a2be3283d65475bb693c5381f312424
+          blockGroup: 350c9422ada5407d9b77b1bb90e92a80
+          sortingKey: "000006"
+          contentHash: b63d6b8b
+          executionCount: 0
+          executionFinishedAt: '2026-06-06T01:29:07.223000Z'
+          executionStartedAt: '2026-06-06T01:29:07.223000Z'
+          outputs: []
+          type: input-text
+          content: ""
+          metadata:
+            execution_start: 1780709347224
+            execution_millis: 0
+            execution_context_id: 406937cb-8df2-4c10-8336-c9df4da695ad
+            deepnote_variable_name: PROMPT_OVERRIDE
+            deepnote_input_label: 'Optional: override prompt entirely (supersedes PROMPT_PROFILE if non-empty). Paste a custom prompt body for one-off experiments without modifying Cell 14.'
+            deepnote_variable_value: ""
+            deepnote_variable_default_value: ""
         - id: 7a3b0745b9f247e9aff9427d415b9bf0
           blockGroup: 350c9422ada5407d9b77b1bb90e92a80
           sortingKey: "000006"
@@ -891,24 +894,28 @@ project:
           executionCount: 19
           executionFinishedAt: 2026-06-04T15:32:57.998000Z
           executionStartedAt: 2026-06-04T15:32:57.998000Z
-          outputs:
-            - name: stdout
-              text: >
-                PROMPT_PROFILE=trading-education (2221 chars)
-              output_type: stream
+          outputs: []
           type: code
-          content: >-
+          content: |
+            # §6.5 — PROMPT PROFILE LIBRARY (inline mirror of canonical disk YAMLs)
+            # Canonical source: notebooks/video-ingestion/prompt-profiles/<archetype>.yaml
+            # Architecture: Task #117 (2026-06-05). Per-profile entries carry both the
+            # prompt body AND optional channel_hints (uploader-name → hint-text). The
+            # resolver below appends a matched hint to the prompt at runtime.
+            #
+            # To override at runtime without code changes: set the PROMPT_OVERRIDE
+            # Deepnote input block — its value supersedes the profile lookup entirely.
+
             PROMPT_PROFILES = {
-                'trading-intelligence': '''You are a market-intelligence analyst watching a financial-content video SEGMENT for an algorithmic trading system.
+                'trading-intelligence': {
+                    'prompt': '''You are a market-intelligence analyst watching a financial-content video SEGMENT for an algorithmic trading system.
 
-            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null for fields with no
-            signal. Do not invent.
-
+            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null for fields with no signal. Do not invent.
 
             {
               "segment_summary": "2-3 sentence narrative of what happens in this segment",
               "tickers": ["BTC", "ETH"],
-              "price_callouts": [{"ticker": "BTC", "price": 67500, "context": "...", "timestamp_in_segment_sec": <number>}],
+              "price_callouts": [{"ticker": "BTC", "price": 67500, "context": "...", "timestamp_in_segment_sec": 0}],
               "sentiment": {"BTC": "bullish|bearish|neutral"},
               "macro_events": ["FOMC Wed"],
               "chart_patterns": ["BTC head-and-shoulders"],
@@ -916,61 +923,22 @@ project:
               "time_sensitivity": "now|this-week|longer-term|null"
             }
 
-
             Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {},
+                },
+                'general-summary': {
+                    'prompt': '''Describe what happens in this video segment in 4-6 sentences. Capture the narrative arc, what is shown, what is said. Return JSON {"summary": "..."}.''',
+                    'channel_hints': {},
+                },
+                'trading-education': {
+                    'prompt': '''You are a trading-curriculum analyst reviewing a SEGMENT of an educational trading video for an algorithmic trading agent ("the kid"). The kid will be quizzed on what was taught and is expected to apply these lessons in production trading.
 
-                'general-summary': '''Describe what happens in this video segment in 4-6 sentences. Capture the narrative arc, what is shown, what is said. Return JSON {"summary": "..."}.''',
-
-                'ai-systems-research': '''You are a research analyst extracting structured signal from a SEGMENT of a paper-companion / AI-systems-research video (Two Minute Papers, Yannic Kilcher, AI Coffee Break, paper-author talks, conference recordings, etc.). Downstream consumers will use this signal to: (a) write technically-precise blog posts citing the work, (b) cross-link the work to existing infrastructure / prior art, (c) build lesson cards. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
-
-For THIS VIDEO SEGMENT (which is one part of a longer piece), return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal in this segment.
-
-{
-  "segment_summary": "3-5 sentence narrative of what is explained/shown in this segment, in order, preserving the actual reasoning arc the narrator follows",
-  "claimed_problem": "what the speaker says the underlying problem is — verbatim or close paraphrase. Empty if not stated in this segment.",
-  "proposed_mechanism": "how the approach works in plain words. Include the SEQUENCE of steps if the speaker walks through them. Empty if this segment isn't about the mechanism.",
-  "key_components": [
-    {"name": "Lean validator", "role_in_system": "ground-truth proof checker — cannot be hallucinated past", "timestamp_in_segment_sec": <when introduced>}
-  ],
-  "quantitative_results": [
-    {"value": "9 of 353 Erdős problems solved", "context": "subset selected for ease of Lean formalization", "timestamp_in_segment_sec": <number>}
-  ],
-  "design_principles": [
-    {"principle": "reliable system built from unreliable parts", "as_stated_by_speaker": "verbatim if memorable, paraphrased otherwise", "timestamp_in_segment_sec": <number>}
-  ],
-  "limitations_acknowledged": ["limitations the speaker explicitly raises — selection bias, smaller models fail, etc."],
-  "historical_arc_callouts": [
-    {"claim": "GPT-3 couldn't add numbers reliably", "when_stated": "four years ago", "purpose_in_argument": "establishes the trajectory toward solving open problems"}
-  ],
-  "cross_references": [
-    {"reference": "Paul Erdős", "type": "person|paper|system|concept", "why_mentioned": "context for the problem set"}
-  ],
-  "visual_examples_described": [
-    {"chart_or_diagram": "graph showing 353 Erdős problems attempted with 95.7% failure rate", "what_it_demonstrates": "scale of difficulty + selectivity of success", "timestamp_in_segment_sec": <number>}
-  ],
-  "key_quotes": [
-    {"quote": "verbatim memorable line worth citing in a blog post", "timestamp_in_segment_sec": <number>, "why_quotable": "captures the thesis in one sentence | counterintuitive framing | etc."}
-  ],
-  "connections_to_named_systems": [
-    {"system_or_concept": "chess Elo rating system", "how_it_connects": "candidates ranked by Elo, tournament selection between proposals"}
-  ],
-  "actionable_for_researcher": ["specific things a researcher in adjacent fields (memory systems, retrieval, formal methods) should DO with this knowledge"],
-  "unanswered_questions": ["questions the speaker raises but does not resolve — interesting follow-ups"]
-}
-
-Return ONLY the JSON object, no preamble.''',
-
-    'trading-education': '''You are a trading-curriculum analyst reviewing a SEGMENT of an educational trading video for an algorithmic trading agent ("the kid"). The kid will be quizzed on what was taught and is expected to apply these lessons in production trading.
-
-            For THIS VIDEO SEGMENT (which is one part of a longer lesson), return STRICT JSON with these exact fields.
-            Use empty arrays / null / empty strings for fields with no signal in this segment. Do not invent content
-            that is not actually shown or said.
-
+            For THIS VIDEO SEGMENT (which is one part of a longer lesson), return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal in this segment. Do not invent content that is not actually shown or said.
 
             {
               "segment_summary": "3-5 sentence narrative of what is taught in this segment, in order, capturing the actual teaching arc",
               "concepts": [
-                {"name": "volume bar", "timestamp_in_segment_sec": <when introduced>, "definition_as_taught": "what the speaker actually said it means"}
+                {"name": "volume bar", "timestamp_in_segment_sec": 0, "definition_as_taught": "what the speaker actually said it means"}
               ],
               "patterns_named": [
                 {"name": "Bull Flag Breakout", "visual_description": "what it looks like on the chart in this segment", "entry_rule": "verbatim or paraphrased entry trigger as the speaker described it", "exit_or_stop_rule": "if mentioned", "confirmation_signals": ["MACD above signal", "volume > 5x avg"]}
@@ -982,7 +950,7 @@ Return ONLY the JSON object, no preamble.''',
                 {"name": "low float filter", "predicate": "share_float < 10_000_000", "rationale": "small float amplifies % moves"}
               ],
               "code_or_pseudocode": [
-                {"language": "python|pseudo", "snippet": "if bar.high > prev_bar.high and macd.line > macd.signal: fire_entry()", "purpose": "what this code does"}
+                {"language": "python", "snippet": "if bar.high > prev_bar.high and macd.line > macd.signal: fire_entry()", "purpose": "what this code does"}
               ],
               "key_quotes": ["verbatim instructive statements from the narrator if shown on screen as caption OR spoken-and-clearly-pedagogical"],
               "actionable_for_agent": ["specific things an algorithmic trading agent should DO with this knowledge"],
@@ -993,15 +961,207 @@ Return ONLY the JSON object, no preamble.''',
               "risk_warnings": ["asymmetric-downside flags or risk warnings raised by speaker"]
             }
 
-
             Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {},
+                },
+                'ai-systems-research': {
+                    'prompt': '''You are a research analyst extracting structured signal from a SEGMENT of a paper-companion / AI-systems-research video (Two Minute Papers, Yannic Kilcher, AI Coffee Break, paper-author talks, conference recordings, etc.). Downstream consumers will use this signal to: (a) write technically-precise blog posts citing the work, (b) cross-link the work to existing infrastructure / prior art, (c) build lesson cards. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
 
+            For THIS VIDEO SEGMENT (which is one part of a longer piece), return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal in this segment.
+
+            {
+              "segment_summary": "3-5 sentence narrative of what is explained/shown in this segment, in order, preserving the actual reasoning arc the narrator follows",
+              "claimed_problem": "what the speaker says the underlying problem is — verbatim or close paraphrase. Empty if not stated in this segment.",
+              "proposed_mechanism": "how the approach works in plain words. Include the SEQUENCE of steps if the speaker walks through them. Empty if this segment isn't about the mechanism.",
+              "key_components": [
+                {"name": "Lean validator", "role_in_system": "ground-truth proof checker — cannot be hallucinated past", "timestamp_in_segment_sec": 0}
+              ],
+              "quantitative_results": [
+                {"value": "9 of 353 Erdős problems solved", "context": "subset selected for ease of Lean formalization", "timestamp_in_segment_sec": 0}
+              ],
+              "design_principles": [
+                {"principle": "reliable system built from unreliable parts", "as_stated_by_speaker": "verbatim if memorable, paraphrased otherwise", "timestamp_in_segment_sec": 0}
+              ],
+              "limitations_acknowledged": ["limitations the speaker explicitly raises — selection bias, smaller models fail, etc."],
+              "historical_arc_callouts": [
+                {"claim": "GPT-3 couldn't add numbers reliably", "when_stated": "four years ago", "purpose_in_argument": "establishes the trajectory toward solving open problems"}
+              ],
+              "cross_references": [
+                {"reference": "Paul Erdős", "type": "person", "why_mentioned": "context for the problem set"}
+              ],
+              "visual_examples_described": [
+                {"chart_or_diagram": "graph showing 353 Erdős problems attempted with 95.7% failure rate", "what_it_demonstrates": "scale of difficulty + selectivity of success", "timestamp_in_segment_sec": 0}
+              ],
+              "key_quotes": [
+                {"quote": "verbatim memorable line worth citing in a blog post", "timestamp_in_segment_sec": 0, "why_quotable": "captures the thesis in one sentence"}
+              ],
+              "connections_to_named_systems": [
+                {"system_or_concept": "chess Elo rating system", "how_it_connects": "candidates ranked by Elo, tournament selection between proposals"}
+              ],
+              "actionable_for_researcher": ["specific things a researcher in adjacent fields (memory systems, retrieval, formal methods) should DO with this knowledge"],
+              "unanswered_questions": ["questions the speaker raises but does not resolve — interesting follow-ups"]
             }
 
+            Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {
+                        'Two Minute Papers': '''Narrator is Károly Zsolnai-Fehér — meta-commentator with recurring memes ("first law of papers", "what a time to be alive", "hold on to your papers fellow scholars", "dear fellow scholars"). Capture these verbatim in key_quotes — downstream consumers will recognize them as audience-hook signals.''',
+                        'Google DeepMind': '''Official DeepMind channel. Speakers are often paper authors. Slides are authoritative — extract slide-visible text verbatim in visual_examples_described. Author motivation differs from third-party explainer framing — preserve their phrasing.''',
+                    },
+                },
+                'paper-author-talk': {
+                    'prompt': '''You are a research analyst extracting structured signal from a SEGMENT of a conference talk (NeurIPS, ICML, ICLR, paper-author guest spots) given BY THE PAPER'S AUTHOR. This is different from an explainer video: the slides ARE the content, Q&A reveals what's NOT in the paper, author motivation is authoritative, and frontier admissions ("we don't know yet") are gold for honest framing. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
 
-            PROMPT = PROMPT_PROFILES.get(PROMPT_PROFILE, PROMPT_PROFILES['trading-education'])
+            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
 
-            print(f'PROMPT_PROFILE={PROMPT_PROFILE} ({len(PROMPT)} chars)')
+            {
+              "segment_summary": "3-5 sentence narrative of what was presented/discussed in this segment, in the speaker's own framing",
+              "slide_text_visible": [
+                {"slide_title_or_section": "Method overview", "key_bullets": ["bullet 1 verbatim from slide", "bullet 2"], "diagrams_shown": "what the slide visually depicts", "timestamp_in_segment_sec": 0}
+              ],
+              "author_motivation": "why the author says they pursued this work — verbatim or close paraphrase. The 'why' the paper buries in the intro.",
+              "key_method_claims": [
+                {"claim": "verbatim or paraphrased claim about how the method works", "evidence_provided_in_talk": "what slide / result they show to back the claim", "timestamp_in_segment_sec": 0}
+              ],
+              "quantitative_results": [
+                {"value": "headline number stated", "context": "what's being measured + against what baseline", "timestamp_in_segment_sec": 0}
+              ],
+              "frontier_admissions": [
+                {"admission": "what the author says doesn't yet work / is unsolved / is open", "stakes": "why this admission matters", "timestamp_in_segment_sec": 0}
+              ],
+              "qa_exchanges": [
+                {"question_paraphrased": "what the audience member asked", "answer_paraphrased": "what the author responded", "reveals_what": "what this exchange shows about the work that the paper itself doesn't say", "timestamp_in_segment_sec": 0}
+              ],
+              "future_work_hints": ["next-step directions the author drops in passing"],
+              "comparisons_to_prior_work": [
+                {"prior_work": "named paper / system", "stated_relationship": "how the author positions this work vs that one", "timestamp_in_segment_sec": 0}
+              ],
+              "audience_reactions": ["laughs / surprised reactions / pushbacks that signal where the talk lands or doesn't"],
+              "key_quotes": [
+                {"quote": "verbatim memorable line worth citing", "timestamp_in_segment_sec": 0, "why_quotable": "first-person author claim, frontier admission, or surprising framing"}
+              ],
+              "actionable_for_researcher": ["things a researcher in adjacent fields should DO with this — read the paper, reproduce X, compare against Y"],
+              "unanswered_questions": ["questions raised in Q&A that didn't get full answers — or that the author punted"]
+            }
+
+            Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {
+                        'Google DeepMind': '''Official DeepMind channel. Speakers often have institutional gravitas — capture their exact phrasing, especially for frontier_admissions. DeepMind talks tend to acknowledge limitations more openly than press releases — surface those verbatim.''',
+                    },
+                },
+                'coding-tutorial': {
+                    'prompt': '''You are a curriculum analyst extracting structured signal from a SEGMENT of a hands-on coding tutorial / walkthrough video (Karpathy nanoGPT, "let's build X from scratch", live-coding paper reproductions, etc.). In this archetype the CODE IS THE CONTENT. Snippet order matters because each snippet builds on the previous. Design choices the narrator calls out (vs alternatives they dismiss) reveal the load-bearing decisions. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+            {
+              "segment_summary": "3-5 sentence narrative of what is built/explained in this segment, in the order the narrator walks through it",
+              "code_snippets": [
+                {"language": "python|cuda|rust|...", "snippet_verbatim_or_close": "exact code shown on screen (preserve indentation, line breaks)", "purpose": "what this snippet does in the larger build", "position_in_build": "step N of M, or 'replaces earlier snippet at <hh:mm>'", "timestamp_in_segment_sec": 0}
+              ],
+              "conceptual_steps": [
+                {"step_name": "tokenization", "what_problem_does_it_solve": "narrator's framing of why this step is needed", "leads_to_next_step": "how this enables the following step", "timestamp_in_segment_sec": 0}
+              ],
+              "design_choices_called_out": [
+                {"choice": "use bf16 not fp32", "rationale_as_narrated": "narrator's reason — verbatim if memorable", "alternatives_considered": ["fp32", "fp16"], "timestamp_in_segment_sec": 0}
+              ],
+              "alternatives_dismissed": [
+                {"alternative": "manual tokenizer", "why_dismissed_per_narrator": "verbatim or paraphrased", "timestamp_in_segment_sec": 0}
+              ],
+              "pitfalls_warned": [
+                {"pitfall": "off-by-one in causal mask", "narrator_advice": "what to do / what to check / how to spot it", "timestamp_in_segment_sec": 0}
+              ],
+              "final_artifact_described": "what the narrator says the working end-product will do at the end of the full tutorial (might be stated up-front or mid-stream)",
+              "dependencies_introduced": [
+                {"library_or_tool": "torch", "version_mentioned_if_any": "2.x", "purpose": "what it's used for in this build", "timestamp_in_segment_sec": 0}
+              ],
+              "test_or_validation_shown": [
+                {"what_was_tested": "forward pass output", "how_validated": "compared against reference / asserted shape / printed sample", "timestamp_in_segment_sec": 0}
+              ],
+              "performance_callouts": [
+                {"metric": "tokens/sec", "value_stated": "12K on A100", "context": "training step on a single A100", "timestamp_in_segment_sec": 0}
+              ],
+              "key_quotes": [
+                {"quote": "verbatim memorable line — often a design-aesthetic statement like 'we want to be able to delete this line later'", "timestamp_in_segment_sec": 0, "why_quotable": "captures a teachable principle, not just a fact"}
+              ],
+              "actionable_for_learner": ["specific things a learner should DO after watching — clone repo X, try variation Y, read paper Z"]
+            }
+
+            Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {},
+                },
+                'product-announcement': {
+                    'prompt': '''You are a research analyst extracting structured signal from a SEGMENT of a product-announcement / capability-launch video from an AI lab (OpenAI launches, Anthropic Claude demos, DeepMind blog-post-video tier, Google AI announcements). This archetype is LIGHT ON MECHANISM, HEAVY ON CLAIMS. Critical extractions: verbatim capability claims, benchmarks WITH their baselines and caveats, live-demo vs promised-demo distinction, competitor comparisons, and ANY caveat the speaker buries (fine print, conditions, "in select cases"). Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+            For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+            {
+              "segment_summary": "3-5 sentence narrative of what is announced/demonstrated in this segment, neutral framing",
+              "capability_claims": [
+                {"claim_verbatim": "exact wording the speaker uses for the capability", "qualified_by": "any modifier like 'often', 'in some cases', 'state-of-the-art on X' — capture these verbatim", "timestamp_in_segment_sec": 0}
+              ],
+              "benchmarks_cited": [
+                {"benchmark_name": "MMLU", "score": "92.3%", "comparator_or_baseline": "what they're comparing against — prior model, competitor, human baseline", "caveat_mentioned": "any caveat the speaker dropped — eval set, methodology, prompt engineering used", "timestamp_in_segment_sec": 0}
+              ],
+              "live_demo_described": [
+                {"demo_action": "what was actually shown happening on screen", "result_shown": "what the system produced", "claim_about_result": "what the speaker said the result demonstrates", "potential_issues_visible": "any glitches / cherry-picking signals / non-real-time edits visible in the demo", "timestamp_in_segment_sec": 0}
+              ],
+              "promised_capabilities_not_demoed": [
+                {"promise": "what was claimed but NOT shown live", "when_available": "ship date / 'soon' / 'in preview' if stated", "timestamp_in_segment_sec": 0}
+              ],
+              "availability_terms": [
+                {"who_can_access": "Pro tier / select customers / waitlist / API only", "when": "today / next month / Q3", "geographic_or_other_restrictions": "stated limits", "timestamp_in_segment_sec": 0}
+              ],
+              "competitor_comparisons": [
+                {"competitor_or_model": "GPT-5 / Gemini Pro / Llama-4", "comparison_made": "what specifically being compared (capability / benchmark / cost)", "framing": "stated as 'better than X', 'faster than Y', etc.", "timestamp_in_segment_sec": 0}
+              ],
+              "caveats_buried_in_fine_print": [
+                {"caveat": "the bit that limits the strong claim — e.g. 'on text-only inputs', 'when prompted correctly'", "what_claim_it_qualifies": "the headline claim this caveat actually constrains", "timestamp_in_segment_sec": 0}
+              ],
+              "pricing_or_cost_mentioned": [
+                {"product_or_capability": "what's being priced", "price_or_cost_signal": "exact figure or relative cost framing", "comparison_to_prior_or_alternatives": "vs previous version / vs competitor", "timestamp_in_segment_sec": 0}
+              ],
+              "safety_or_alignment_claims": [
+                {"claim": "what they say about safety/alignment/testing", "specifics_given": "concrete process / methodology mentioned OR 'no specifics' if it's just rhetoric", "timestamp_in_segment_sec": 0}
+              ],
+              "key_quotes": [
+                {"quote": "verbatim memorable line — strong capability claim, surprising framing, or revealing caveat", "timestamp_in_segment_sec": 0, "why_quotable": "captures the announcement's load-bearing claim OR exposes a tension"}
+              ],
+              "actionable_for_competitive_analyst": ["specific things to track — what to benchmark independently, what claims to stress-test, what to compare against competitor offerings"]
+            }
+
+            Return ONLY the JSON object, no preamble.''',
+                    'channel_hints': {},
+                },
+            }
+
+            # ── Resolve PROMPT for this run ──────────────────────────────────────────
+            # Precedence: PROMPT_OVERRIDE > matched profile + channel_hint > matched profile > fallback
+            PROMPT_OVERRIDE_RAW = (globals().get('PROMPT_OVERRIDE') or os.environ.get('PROMPT_OVERRIDE', '') or '').strip()
+
+            if PROMPT_OVERRIDE_RAW:
+                PROMPT = PROMPT_OVERRIDE_RAW
+                SELECTED_PROFILE = 'PROMPT_OVERRIDE'
+                print(f'PROMPT_OVERRIDE active ({len(PROMPT)} chars) — profile lookup bypassed')
+            elif PROMPT_PROFILE in PROMPT_PROFILES:
+                _entry = PROMPT_PROFILES[PROMPT_PROFILE]
+                _base = _entry['prompt']
+                _hints = _entry.get('channel_hints', {})
+                _uploader = (globals().get('uploader') or '').lower()
+                _matched_ch = next(((k, v) for k, v in _hints.items() if k.lower() in _uploader), None)
+                if _matched_ch:
+                    _ch_key, _ch_text = _matched_ch
+                    PROMPT = _base + f'\n\n## Channel hint — {_ch_key}\n{_ch_text}\n'
+                    SELECTED_PROFILE = PROMPT_PROFILE
+                    print(f'PROMPT_PROFILE={PROMPT_PROFILE} + channel_hint={_ch_key!r} ({len(PROMPT)} chars)')
+                else:
+                    PROMPT = _base
+                    SELECTED_PROFILE = PROMPT_PROFILE
+                    print(f'PROMPT_PROFILE={PROMPT_PROFILE} ({len(PROMPT)} chars)')
+            else:
+                _fallback = 'trading-education' if 'trading-education' in PROMPT_PROFILES else next(iter(PROMPT_PROFILES))
+                PROMPT = PROMPT_PROFILES[_fallback]['prompt']
+                SELECTED_PROFILE = _fallback
+                print(f'WARNING: PROMPT_PROFILE={PROMPT_PROFILE!r} not found, falling back to {_fallback!r}')
           metadata:
             execution_start: 1780587177998
             execution_millis: 0

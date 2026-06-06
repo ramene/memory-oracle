@@ -1,0 +1,55 @@
+name: ai-systems-research
+applies_to_archetype: paper-companion-explainer
+output_schema_version: 1
+created_at: 2026-06-05
+description: Paper-companion / AI-systems-research videos (Two Minute Papers, AI Coffee Break, paper explainer channels). Tuned for precise blog-citation and cross-domain prior-art linking.
+tested_against_channels:
+  - Two Minute Papers
+
+prompt: |
+  You are a research analyst extracting structured signal from a SEGMENT of a paper-companion / AI-systems-research video (Two Minute Papers, Yannic Kilcher, AI Coffee Break, paper-author talks, conference recordings, etc.). Downstream consumers will use this signal to: (a) write technically-precise blog posts citing the work, (b) cross-link the work to existing infrastructure / prior art, (c) build lesson cards. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+  For THIS VIDEO SEGMENT (which is one part of a longer piece), return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal in this segment.
+
+  {
+    "segment_summary": "3-5 sentence narrative of what is explained/shown in this segment, in order, preserving the actual reasoning arc the narrator follows",
+    "claimed_problem": "what the speaker says the underlying problem is — verbatim or close paraphrase. Empty if not stated in this segment.",
+    "proposed_mechanism": "how the approach works in plain words. Include the SEQUENCE of steps if the speaker walks through them. Empty if this segment isn't about the mechanism.",
+    "key_components": [
+      {"name": "Lean validator", "role_in_system": "ground-truth proof checker — cannot be hallucinated past", "timestamp_in_segment_sec": 0}
+    ],
+    "quantitative_results": [
+      {"value": "9 of 353 Erdős problems solved", "context": "subset selected for ease of Lean formalization", "timestamp_in_segment_sec": 0}
+    ],
+    "design_principles": [
+      {"principle": "reliable system built from unreliable parts", "as_stated_by_speaker": "verbatim if memorable, paraphrased otherwise", "timestamp_in_segment_sec": 0}
+    ],
+    "limitations_acknowledged": ["limitations the speaker explicitly raises — selection bias, smaller models fail, etc."],
+    "historical_arc_callouts": [
+      {"claim": "GPT-3 couldn't add numbers reliably", "when_stated": "four years ago", "purpose_in_argument": "establishes the trajectory toward solving open problems"}
+    ],
+    "cross_references": [
+      {"reference": "Paul Erdős", "type": "person", "why_mentioned": "context for the problem set"}
+    ],
+    "visual_examples_described": [
+      {"chart_or_diagram": "graph showing 353 Erdős problems attempted with 95.7% failure rate", "what_it_demonstrates": "scale of difficulty + selectivity of success", "timestamp_in_segment_sec": 0}
+    ],
+    "key_quotes": [
+      {"quote": "verbatim memorable line worth citing in a blog post", "timestamp_in_segment_sec": 0, "why_quotable": "captures the thesis in one sentence"}
+    ],
+    "connections_to_named_systems": [
+      {"system_or_concept": "chess Elo rating system", "how_it_connects": "candidates ranked by Elo, tournament selection between proposals"}
+    ],
+    "actionable_for_researcher": ["specific things a researcher in adjacent fields (memory systems, retrieval, formal methods) should DO with this knowledge"],
+    "unanswered_questions": ["questions the speaker raises but does not resolve — interesting follow-ups"]
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints:
+  "Two Minute Papers":
+    note: |
+      Narrator is Károly Zsolnai-Fehér — meta-commentator with recurring memes ("first law of papers", "what a time to be alive", "hold on to your papers fellow scholars", "dear fellow scholars"). Capture these verbatim in key_quotes — downstream consumers will recognize them as audience-hook signals.
+  "Google DeepMind":
+    note: |
+      Official DeepMind channel. Speakers are often paper authors. Slides are authoritative — extract slide-visible text verbatim in visual_examples_described. Author motivation differs from third-party explainer framing — preserve their phrasing.

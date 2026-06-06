@@ -1,0 +1,50 @@
+name: product-announcement
+applies_to_archetype: product-announcement
+output_schema_version: 1
+created_at: 2026-06-05
+description: Launch / capability / demo videos from AI labs (OpenAI announcements, Anthropic demos, DeepMind blog-post-video tier). Capability claims dominate, mechanism is thin, demos vs promises differ, benchmarks need baseline + caveat.
+tested_against_channels: []
+
+prompt: |
+  You are a research analyst extracting structured signal from a SEGMENT of a product-announcement / capability-launch video from an AI lab (OpenAI launches, Anthropic Claude demos, DeepMind blog-post-video tier, Google AI announcements). This archetype is LIGHT ON MECHANISM, HEAVY ON CLAIMS. Critical extractions: verbatim capability claims, benchmarks WITH their baselines and caveats, live-demo vs promised-demo distinction, competitor comparisons, and ANY caveat the speaker buries (fine print, conditions, "in select cases"). Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+  For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+  {
+    "segment_summary": "3-5 sentence narrative of what is announced/demonstrated in this segment, neutral framing",
+    "capability_claims": [
+      {"claim_verbatim": "exact wording the speaker uses for the capability", "qualified_by": "any modifier like 'often', 'in some cases', 'state-of-the-art on X' — capture these verbatim", "timestamp_in_segment_sec": 0}
+    ],
+    "benchmarks_cited": [
+      {"benchmark_name": "MMLU", "score": "92.3%", "comparator_or_baseline": "what they're comparing against — prior model, competitor, human baseline", "caveat_mentioned": "any caveat the speaker dropped — eval set, methodology, prompt engineering used", "timestamp_in_segment_sec": 0}
+    ],
+    "live_demo_described": [
+      {"demo_action": "what was actually shown happening on screen", "result_shown": "what the system produced", "claim_about_result": "what the speaker said the result demonstrates", "potential_issues_visible": "any glitches / cherry-picking signals / non-real-time edits visible in the demo", "timestamp_in_segment_sec": 0}
+    ],
+    "promised_capabilities_not_demoed": [
+      {"promise": "what was claimed but NOT shown live", "when_available": "ship date / 'soon' / 'in preview' if stated", "timestamp_in_segment_sec": 0}
+    ],
+    "availability_terms": [
+      {"who_can_access": "Pro tier / select customers / waitlist / API only", "when": "today / next month / Q3", "geographic_or_other_restrictions": "stated limits", "timestamp_in_segment_sec": 0}
+    ],
+    "competitor_comparisons": [
+      {"competitor_or_model": "GPT-5 / Gemini Pro / Llama-4", "comparison_made": "what specifically being compared (capability / benchmark / cost)", "framing": "stated as 'better than X', 'faster than Y', etc.", "timestamp_in_segment_sec": 0}
+    ],
+    "caveats_buried_in_fine_print": [
+      {"caveat": "the bit that limits the strong claim — e.g. 'on text-only inputs', 'when prompted correctly'", "what_claim_it_qualifies": "the headline claim this caveat actually constrains", "timestamp_in_segment_sec": 0}
+    ],
+    "pricing_or_cost_mentioned": [
+      {"product_or_capability": "what's being priced", "price_or_cost_signal": "exact figure or relative cost framing", "comparison_to_prior_or_alternatives": "vs previous version / vs competitor", "timestamp_in_segment_sec": 0}
+    ],
+    "safety_or_alignment_claims": [
+      {"claim": "what they say about safety/alignment/testing", "specifics_given": "concrete process / methodology mentioned OR 'no specifics' if it's just rhetoric", "timestamp_in_segment_sec": 0}
+    ],
+    "key_quotes": [
+      {"quote": "verbatim memorable line — strong capability claim, surprising framing, or revealing caveat", "timestamp_in_segment_sec": 0, "why_quotable": "captures the announcement's load-bearing claim OR exposes a tension"}
+    ],
+    "actionable_for_competitive_analyst": ["specific things to track — what to benchmark independently, what claims to stress-test, what to compare against competitor offerings"]
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints: {}
