@@ -921,7 +921,46 @@ project:
 
                 'general-summary': '''Describe what happens in this video segment in 4-6 sentences. Capture the narrative arc, what is shown, what is said. Return JSON {"summary": "..."}.''',
 
-                'trading-education': '''You are a trading-curriculum analyst reviewing a SEGMENT of an educational trading video for an algorithmic trading agent ("the kid"). The kid will be quizzed on what was taught and is expected to apply these lessons in production trading.
+                'ai-systems-research': '''You are a research analyst extracting structured signal from a SEGMENT of a paper-companion / AI-systems-research video (Two Minute Papers, Yannic Kilcher, AI Coffee Break, paper-author talks, conference recordings, etc.). Downstream consumers will use this signal to: (a) write technically-precise blog posts citing the work, (b) cross-link the work to existing infrastructure / prior art, (c) build lesson cards. Precision matters more than coverage. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+For THIS VIDEO SEGMENT (which is one part of a longer piece), return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal in this segment.
+
+{
+  "segment_summary": "3-5 sentence narrative of what is explained/shown in this segment, in order, preserving the actual reasoning arc the narrator follows",
+  "claimed_problem": "what the speaker says the underlying problem is — verbatim or close paraphrase. Empty if not stated in this segment.",
+  "proposed_mechanism": "how the approach works in plain words. Include the SEQUENCE of steps if the speaker walks through them. Empty if this segment isn't about the mechanism.",
+  "key_components": [
+    {"name": "Lean validator", "role_in_system": "ground-truth proof checker — cannot be hallucinated past", "timestamp_in_segment_sec": <when introduced>}
+  ],
+  "quantitative_results": [
+    {"value": "9 of 353 Erdős problems solved", "context": "subset selected for ease of Lean formalization", "timestamp_in_segment_sec": <number>}
+  ],
+  "design_principles": [
+    {"principle": "reliable system built from unreliable parts", "as_stated_by_speaker": "verbatim if memorable, paraphrased otherwise", "timestamp_in_segment_sec": <number>}
+  ],
+  "limitations_acknowledged": ["limitations the speaker explicitly raises — selection bias, smaller models fail, etc."],
+  "historical_arc_callouts": [
+    {"claim": "GPT-3 couldn't add numbers reliably", "when_stated": "four years ago", "purpose_in_argument": "establishes the trajectory toward solving open problems"}
+  ],
+  "cross_references": [
+    {"reference": "Paul Erdős", "type": "person|paper|system|concept", "why_mentioned": "context for the problem set"}
+  ],
+  "visual_examples_described": [
+    {"chart_or_diagram": "graph showing 353 Erdős problems attempted with 95.7% failure rate", "what_it_demonstrates": "scale of difficulty + selectivity of success", "timestamp_in_segment_sec": <number>}
+  ],
+  "key_quotes": [
+    {"quote": "verbatim memorable line worth citing in a blog post", "timestamp_in_segment_sec": <number>, "why_quotable": "captures the thesis in one sentence | counterintuitive framing | etc."}
+  ],
+  "connections_to_named_systems": [
+    {"system_or_concept": "chess Elo rating system", "how_it_connects": "candidates ranked by Elo, tournament selection between proposals"}
+  ],
+  "actionable_for_researcher": ["specific things a researcher in adjacent fields (memory systems, retrieval, formal methods) should DO with this knowledge"],
+  "unanswered_questions": ["questions the speaker raises but does not resolve — interesting follow-ups"]
+}
+
+Return ONLY the JSON object, no preamble.''',
+
+    'trading-education': '''You are a trading-curriculum analyst reviewing a SEGMENT of an educational trading video for an algorithmic trading agent ("the kid"). The kid will be quizzed on what was taught and is expected to apply these lessons in production trading.
 
             For THIS VIDEO SEGMENT (which is one part of a longer lesson), return STRICT JSON with these exact fields.
             Use empty arrays / null / empty strings for fields with no signal in this segment. Do not invent content
