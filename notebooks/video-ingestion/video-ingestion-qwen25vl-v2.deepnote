@@ -796,31 +796,25 @@ project:
           executionCount: 18
           executionFinishedAt: 2026-06-04T15:32:57.951000Z
           executionStartedAt: 2026-06-04T15:31:28.967000Z
-          outputs:
-            - name: stdout
-              text: >
-                GPU has 14 GB - 4-bit NF4 (BitsAndBytesConfig)
-
-                Loading Qwen/Qwen2.5-VL-7B-Instruct on cuda...
-
-                Fetching 5 files: 100%|██████████| 5/5 [01:18<00:00, 15.72s/it]
-
-                Loading weights:   0%|          | 2/729
-                [00:01<07:43,  1.57it/s]/root/venv/lib/python3.11/site-packages/bitsandbytes/backends/cuda/ops.py:213:
-                FutureWarning: _check_is_size will be removed in a future PyTorch release along with
-                guard_size_oblivious.     Use _check(i >= 0) instead.
-                  torch._check_is_size(blocksize)
-                Loading weights: 100%|██████████| 729/729 [00:05<00:00, 128.13it/s]
-                  loaded in 88.3s
-              output_type: stream
+          outputs: []
           type: code
-          content: >-
+          content: |-
             # §5 Qwen2.5-VL model load — 4-bit NF4 on T4
+            # Free any previously-loaded VL model in this kernel before re-loading.
+            # Prevents OOM on back-to-back runs (manual + API, or multiple API runs)
+            # on Deepnote's persistent-kernel machines where globals survive across
+            # v2 API run boundaries. Task #122 (2026-06-06).
+            import gc, torch
+            for _v in ('vl_model', 'vl_processor'):
+                if _v in globals():
+                    del globals()[_v]
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
 
             vl_model = None
-
             vl_processor = None
-
 
             if EXTRACT_MODE in ('frames', 'both'):
                 try:
