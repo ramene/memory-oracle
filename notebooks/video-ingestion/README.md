@@ -162,7 +162,7 @@ If Deepnote is unavailable:
 
 - Setup dependencies: ffmpeg (apt), yt-dlp, transformers>=4.49, accelerate,
   bitsandbytes>=0.43, qwen-vl-utils, pillow, einops, sentencepiece, torchvision.
-  For optimal video loading: `pip install 'qwen-vl-utils[decord]==0.0.8'`.
+  For optimal video loading: `pip install 'qwen-vl-utils 0.0.14'`.
 - 8-bit quantization triggers cuBLAS status 15 errors on T4. Use **4-bit nf4
   via BitsAndBytesConfig** instead — cleaner, faster, no errors. See §4.
 - For Hugging Face faster downloads + rate-limit avoidance, set `HF_TOKEN` env
@@ -203,12 +203,12 @@ build from the repo's Dockerfile directly (slower first-build but no registry de
 
 | Package | Version | Why pinned |
 |---|---|---|
-| `torch` | 2.5.1 (cu123) | matches Deepnote TF 2.19 GPU CUDA 12.3 base |
-| `transformers` | 4.49.0 | Qwen2.5-VL processor signature stable here |
+| `torch 2.12.0+cu130) | matches Deepnote TF 2.19 GPU CUDA 13.0 base |
+| `transformers 5.10.1 | Qwen2.5-VL processor signature stable here |
 | `accelerate` | 1.0.1 | `device_map` support |
-| `bitsandbytes` | 0.44.1 | 4-bit NF4 quantization |
+| `bitsandbytes 0.49.2 | 4-bit NF4 quantization |
 | `decord` | 0.6.0 | Qwen-VL fast video reader (vs torchvision fallback) |
-| `qwen-vl-utils` | 0.0.8 | `return_video_kwargs` for native video mode |
+| `qwen-vl-utils 0.0.14 | `return_video_kwargs` for native video mode |
 | `openai-whisper` | 20240930 | audio transcription |
 | `ffmpeg` | system (Ubuntu 22.04 apt) | video chunking |
 
