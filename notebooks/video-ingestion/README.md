@@ -167,3 +167,60 @@ If Deepnote is unavailable:
   via BitsAndBytesConfig** instead — cleaner, faster, no errors. See §4.
 - For Hugging Face faster downloads + rate-limit avoidance, set `HF_TOKEN` env
   var. The notebook will use it automatically.
+
+## Pinned Docker image (Task #121, 2026-06-06)
+
+For reproducible runs, this directory ships a `Dockerfile` that pins every dep
+in the stack to the versions validated working on the AlphaProof Nexus + López
+QuantCon + Warrior Cameron videos. Eliminates the 6 of 8 cold-start bugs that
+were the bulk of pre-2026-06-05 ingestion debugging time.
+
+**Build locally:**
+
+```bash
+cd notebooks/video-ingestion
+docker build -t ghcr.io/ramene/mae-video-ingestion:latest .
+```
+
+**Use the prebuilt image (recommended):**
+
+CI (`.github/workflows/build-video-ingestion-image.yml`) builds and pushes to
+`ghcr.io/ramene/mae-video-ingestion:latest` on every change to the Dockerfile
+or the canonical notebook. Latest digest at
+[GitHub Packages](https://github.com/ramene/memory-oracle/pkgs/container/mae-video-ingestion).
+
+**In Deepnote:**
+
+1. Open the project → Environment selection (gear icon)
+2. **Set up a new Docker image** → paste `ghcr.io/ramene/mae-video-ingestion:latest`
+3. Start the machine — image pulls in ~30s vs the ~5min `pip install` cold-start path
+4. Run cells — no `apt-get` or `pip install` needed; Cell 2 becomes a no-op verification
+
+Alternatively, **Environment selection → Dockerfile → ./Dockerfile** lets Deepnote
+build from the repo's Dockerfile directly (slower first-build but no registry dependency).
+
+### Pinned versions
+
+| Package | Version | Why pinned |
+|---|---|---|
+| `torch` | 2.5.1 (cu123) | matches Deepnote TF 2.19 GPU CUDA 12.3 base |
+| `transformers` | 4.49.0 | Qwen2.5-VL processor signature stable here |
+| `accelerate` | 1.0.1 | `device_map` support |
+| `bitsandbytes` | 0.44.1 | 4-bit NF4 quantization |
+| `decord` | 0.6.0 | Qwen-VL fast video reader (vs torchvision fallback) |
+| `qwen-vl-utils` | 0.0.8 | `return_video_kwargs` for native video mode |
+| `openai-whisper` | 20240930 | audio transcription |
+| `ffmpeg` | system (Ubuntu 22.04 apt) | video chunking |
+
+### Baked environment variables
+
+- `FORCE_QWENVL_VIDEO_READER=decord` — pin video backend (vs torchvision fallback)
+- `TOKENIZERS_PARALLELISM=false` — avoid HF fork warning
+- `HF_HOME=/work/.hf-cache` — persist model cache across container restarts
+- `HF_HUB_ENABLE_HF_TRANSFER=1` — faster HF downloads
+- `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` — reclaim reserved-unallocated memory (the alloc-conf the runtime OOM message suggests)
+
+### Verification on build
+
+The Dockerfile's final layer asserts every pinned version + Qwen-VL processor
+signature presence. If the build succeeds, the stack is known-correct end-to-end.

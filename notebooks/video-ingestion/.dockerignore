@@ -1,0 +1,6 @@
+# mae-video-ingestion .dockerignore — keeps the build context minimal
+# Only the Dockerfile is needed for the build itself.
+
+*
+!Dockerfile
+!.dockerignore

@@ -1,0 +1,78 @@
+name: build-video-ingestion-image
+
+# Builds + pushes the mae-video-ingestion Docker image to GHCR.
+# Triggers: changes to the Dockerfile, the canonical notebook (so version drift
+# in declared deps gets caught), or the batch_ingest.py CLI driver.
+# Manual: workflow_dispatch always available from the Actions tab.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'notebooks/video-ingestion/Dockerfile'
+      - 'notebooks/video-ingestion/video-ingestion-qwen25vl-v2.ipynb'
+      - 'notebooks/video-ingestion/video-ingestion-qwen25vl-v2.deepnote'
+      - 'notebooks/video-ingestion/scripts/batch_ingest.py'
+      - '.github/workflows/build-video-ingestion-image.yml'
+  pull_request:
+    paths:
+      - 'notebooks/video-ingestion/Dockerfile'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/mae-video-ingestion
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=ref,event=pr
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: notebooks/video-ingestion
+          file: notebooks/video-ingestion/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # PR builds verify the Dockerfile compiles without pushing.
+          # Push only on main + manual dispatch.
+
+      - name: Image summary
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "### Pushed image" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tags:" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.meta.outputs.tags }}' | sed 's/^/- `/' | sed 's/$/`/' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Use in Deepnote: Environment selection → Set up new Docker image → \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
