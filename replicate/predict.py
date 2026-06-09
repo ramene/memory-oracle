@@ -242,7 +242,7 @@ class Predictor(BasePredictor):
         self.profiles, self.channel_hints = _load_profiles()
         print(f'[setup] loaded {len(self.profiles)} prompt profiles: {sorted(self.profiles.keys())}')
 
-    def predict(
+    def run(
         self,
         video_url: str = Input(
             description="YouTube URL or direct https .mp4 URL"
