@@ -16,22 +16,36 @@ build:
     - git
     - curl
 
-  # python_packages OMITTED on purpose.
+  # PINNED to cog v0.16.12 (last pre-uv release, Feb 2026).
+  # cog v0.17+ migrated to uv backend, which fails self-install on
+  # uv-managed Python with PEP 668 externally-managed-environment error
+  # — independent of cog.yaml shape. v0.16.12 uses plain pip and works.
   #
-  # Both cog v0.19 and v0.20 auto-generate `uv run pip install -r /tmp/requirements.txt`
-  # for python_packages, which fails with PEP 668 externally-managed-environment
-  # because uv's Python install is treated as managed.
-  #
-  # Workaround: do all installs from `run:` commands with --break-system-packages
-  # so we control the pip invocation and bypass the check.
+  # Operator must install v0.16.12 binary on the build host:
+  #   curl -fL -o ~/.bin/cog \
+  #     'https://github.com/replicate/cog/releases/download/v0.16.12/cog_Darwin_x86_64'
+  #   chmod +x ~/.bin/cog
 
+  python_packages:
+    - transformers==5.10.1
+    - accelerate
+    - bitsandbytes==0.49.2
+    - safetensors
+    - sentencepiece
+    - einops
+    - decord==0.6.0
+    - openai-whisper
+    - ffmpeg-python
+    - Pillow
+    - yt-dlp
+    - requests
+    - tqdm
+    - PyYAML
+
+  # Custom-index + --no-deps installs go here (run at build time, in order)
   run:
-    # PyTorch from cu130 index FIRST (other deps resolve against this torch)
-    - command: pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
-    # Bulk deps (formerly python_packages list)
-    - command: pip install --break-system-packages transformers==5.10.1 accelerate bitsandbytes==0.49.2 safetensors sentencepiece einops decord==0.6.0 openai-whisper ffmpeg-python Pillow yt-dlp requests tqdm PyYAML
-    # qwen-vl-utils last with --no-deps to pin the version without dragging older transformers/torch
-    - command: pip install --break-system-packages --no-deps qwen-vl-utils==0.0.14
+    - command: pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
+    - command: pip install --no-deps qwen-vl-utils==0.0.14
 
 # Predictor entrypoint (v0.19 uses `predict:`)
 predict: "predict.py:Predictor"
