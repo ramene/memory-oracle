@@ -16,13 +16,20 @@ build:
     - git
     - curl
 
-  # Most deps via requirements.txt (cog v0.20+: python_packages → python_requirements)
-  python_requirements: requirements.txt
-
-  # Custom-index installs + --no-deps installs go here (run at build time)
+  # ALL pip installs via `run:` commands using `uv pip install --system`.
+  #
+  # Bypasses cog v0.20's python_requirements codepath which auto-generates
+  # `uv run pip install -r ...` — that hits PEP 668 externally-managed-
+  # environment because uv's Python is treated as managed. uv-native
+  # `uv pip install --system` is the correct invocation for uv-managed Pythons.
+  #
+  # Order matters: PyTorch (cu130 index) first so other deps resolve against it,
+  # then bulk requirements, then qwen-vl-utils --no-deps to pin the version
+  # without dragging in older transformers/torch.
   run:
-    - command: pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
-    - command: pip install --no-deps qwen-vl-utils==0.0.14
+    - command: uv pip install --system --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
+    - command: uv pip install --system -r /src/requirements.txt
+    - command: uv pip install --system --no-deps qwen-vl-utils==0.0.14
 
 # Predictor entrypoint (cog v0.20+: predict → run)
 run: "predict.py:Predictor"
