@@ -380,9 +380,31 @@ def replicate_load_token() -> str:
     sys.exit("FATAL: no REPLICATE_API_TOKEN env var; export it or save to ~/.config/replicate/auth.json")
 
 
-def replicate_post(token: str, model: str, video: Video, extra_inputs: dict) -> dict:
-    """POST a prediction to Replicate. extra_inputs are mapped from DEFAULT_INPUTS
-    key names to predict.py's Input() field names."""
+def replicate_latest_version(token: str, model: str) -> str:
+    """Fetch the latest version SHA for a Replicate model. Returns empty string on error."""
+    url = f"{REPLICATE_API_BASE}/v1/models/{model}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            d = json.loads(resp.read().decode())
+            v = d.get("latest_version") or {}
+            return v.get("id", "")
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return ""
+
+
+def replicate_post(token: str, model: str, video: Video, extra_inputs: dict,
+                    version_sha: str = "") -> dict:
+    """POST a prediction to Replicate.
+
+    Uses /v1/predictions with explicit version field (NOT /v1/models/{owner}/{name}/predictions —
+    that route requires the model's default-version to be explicitly set, which fresh cog
+    pushes often don't have). Auto-fetches the latest version SHA if not supplied."""
+    if not version_sha:
+        version_sha = replicate_latest_version(token, model)
+        if not version_sha:
+            return {"error": f"could not resolve a version SHA for model {model} — confirm model exists + has a published version"}
+
     # Map our Deepnote-style env-var names to Replicate predict.py field names
     inputs = {
         "video_url": video.url,
@@ -397,8 +419,8 @@ def replicate_post(token: str, model: str, video: Video, extra_inputs: dict) -> 
     if "PROMPT_OVERRIDE" in extra_inputs:
         inputs["prompt_override"] = extra_inputs["PROMPT_OVERRIDE"]
 
-    body = {"input": inputs}
-    url = f"{REPLICATE_API_BASE}/v1/models/{model}/predictions"
+    body = {"version": version_sha, "input": inputs}
+    url = f"{REPLICATE_API_BASE}/v1/predictions"
     req = urllib.request.Request(
         url,
         data=json.dumps(body).encode(),
@@ -414,6 +436,9 @@ def replicate_post(token: str, model: str, video: Video, extra_inputs: dict) -> 
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", "replace")[:500]
+        # 402 = insufficient credit; surface a clearer message
+        if e.code == 402:
+            return {"error": f"HTTP 402 INSUFFICIENT CREDIT — add at https://replicate.com/account/billing\n   detail: {body_text}"}
         return {"error": f"HTTP {e.code}: {body_text}"}
     except urllib.error.URLError as e:
         return {"error": f"URL error: {e.reason}"}
