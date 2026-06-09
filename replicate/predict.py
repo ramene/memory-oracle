@@ -257,25 +257,23 @@ class Predictor(BasePredictor):
             ],
         ),
         chunk_duration_sec: int = Input(
-            description="Seconds per video chunk (smaller = more chunks, more memory headroom)",
-            default=300, ge=60, le=600,
+            description="Seconds per video chunk. Capped at 300 in the public listing — for longer chunks, batch processing, custom prompts, webhooks, or SLA, see https://api.karve.ai (commercial tier).",
+            default=300, ge=60, le=300,
         ),
         video_fps: float = Input(
             description="Sample fps per chunk (higher = denser visual capture, more memory)",
-            default=0.5, ge=0.1, le=2.0,
+            default=0.5, ge=0.1, le=1.0,
         ),
         video_max_pixels: int = Input(
             description="Per-frame pixel budget (360*420=151200 default)",
-            default=151200, ge=10000, le=500000,
+            default=151200, ge=10000, le=200000,
         ),
         max_new_tokens: int = Input(
             description="Per-chunk LLM output cap",
-            default=2048, ge=512, le=8192,
+            default=2048, ge=512, le=4096,
         ),
-        prompt_override: str = Input(
-            description="Optional: paste custom prompt to bypass PROFILE entirely",
-            default="",
-        ),
+        # prompt_override removed in public listing — commercial tier feature.
+        # See https://api.karve.ai for custom prompts + batch + webhooks + SLA.
     ) -> dict:
         """Extract structured signal from a video.
         Returns the schema_version=2 output.json shape produced by the local
@@ -283,6 +281,9 @@ class Predictor(BasePredictor):
         """
         import torch
         import gc
+
+        # Public-tier signature: prompt_override is not exposed. Force empty.
+        prompt_override = ""
 
         # GPU cleanup before this prediction (Task #122 pattern — prevents OOM
         # on back-to-back predict() calls if container is reused)
