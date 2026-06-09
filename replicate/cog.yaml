@@ -8,7 +8,12 @@
 
 build:
   gpu: true
-  cuda: "13.0"
+  # CUDA 12.4 (not 13.0) — cog v0.16.12's hardcoded CUDA registry pre-dates
+  # NVIDIA's CUDA 13 release. 12.4 + torch 2.5.1 is the highest matching pair
+  # cog v0.16 supports. Mostly-compatible-but-not-byte-identical with Deepnote's
+  # cu130/torch-2.12 stack — Qwen2.5-VL native video mode tested working from
+  # torch 2.4+ per HF model card.
+  cuda: "12.4"
   python_version: "3.11"
 
   system_packages:
@@ -43,8 +48,10 @@ build:
     - PyYAML
 
   # Custom-index + --no-deps installs go here (run at build time, in order)
+  # torch 2.5.1+cu124 is the highest stable pair compatible with cog v0.16.12's
+  # CUDA 12.4 base. Compatible with transformers 5.10 + Qwen2.5-VL native video.
   run:
-    - command: pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
+    - command: pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1
     - command: pip install --no-deps qwen-vl-utils==0.0.14
 
 # Predictor entrypoint (v0.19 uses `predict:`)
