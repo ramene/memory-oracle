@@ -16,23 +16,32 @@ build:
     - git
     - curl
 
-  # ALL pip installs via `run:` commands using `uv pip install --system`.
-  #
-  # Bypasses cog v0.20's python_requirements codepath which auto-generates
-  # `uv run pip install -r ...` — that hits PEP 668 externally-managed-
-  # environment because uv's Python is treated as managed. uv-native
-  # `uv pip install --system` is the correct invocation for uv-managed Pythons.
-  #
-  # Order matters: PyTorch (cu130 index) first so other deps resolve against it,
-  # then bulk requirements, then qwen-vl-utils --no-deps to pin the version
-  # without dragging in older transformers/torch.
-  run:
-    - command: uv pip install --system --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
-    - command: uv pip install --system -r /src/requirements.txt
-    - command: uv pip install --system --no-deps qwen-vl-utils==0.0.14
+  # v0.19-compatible shape (pinned cog version because v0.20+ has a
+  # transition bug — uv-based Dockerfile fails at the `uv pip install cog`
+  # step with externally-managed-environment / no-venv error).
+  python_packages:
+    - transformers==5.10.1
+    - accelerate
+    - bitsandbytes==0.49.2
+    - safetensors
+    - sentencepiece
+    - einops
+    - decord==0.6.0
+    - openai-whisper
+    - ffmpeg-python
+    - Pillow
+    - yt-dlp
+    - requests
+    - tqdm
+    - PyYAML
 
-# Predictor entrypoint (cog v0.20+: predict → run)
-run: "predict.py:Predictor"
+  # Custom-index + --no-deps installs go here (run at build time, in order)
+  run:
+    - command: pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
+    - command: pip install --no-deps qwen-vl-utils==0.0.14
+
+# Predictor entrypoint (v0.19 uses `predict:`)
+predict: "predict.py:Predictor"
 
 # Image metadata for Replicate marketplace display
 image: "r8.im/ramene/mae-video-ingestion"
