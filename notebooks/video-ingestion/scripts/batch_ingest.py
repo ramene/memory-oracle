@@ -354,6 +354,174 @@ def auto_download_from_drive(video: Video, drive_path: Path,
     return False
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PHASE 2 — ingest (Replicate API alternate backend)
+# Same shape as Deepnote path so --backend replicate is a drop-in switch.
+# ──────────────────────────────────────────────────────────────────────────────
+
+REPLICATE_API_BASE = "https://api.replicate.com"
+DEFAULT_REPLICATE_MODEL = "ramene/mae-video-ingestion"
+
+
+def replicate_load_token() -> str:
+    """Load Replicate API token. Order: REPLICATE_API_TOKEN env > ~/.config/replicate/auth.json."""
+    token = os.environ.get("REPLICATE_API_TOKEN", "").strip()
+    if token:
+        return token
+    cfg = Path.home() / ".config" / "replicate" / "auth.json"
+    if cfg.exists():
+        try:
+            data = json.loads(cfg.read_text())
+            t = data.get("token") or data.get("api_token")
+            if t:
+                return t
+        except Exception:
+            pass
+    sys.exit("FATAL: no REPLICATE_API_TOKEN env var; export it or save to ~/.config/replicate/auth.json")
+
+
+def replicate_post(token: str, model: str, video: Video, extra_inputs: dict) -> dict:
+    """POST a prediction to Replicate. extra_inputs are mapped from DEFAULT_INPUTS
+    key names to predict.py's Input() field names."""
+    # Map our Deepnote-style env-var names to Replicate predict.py field names
+    inputs = {
+        "video_url": video.url,
+        "profile": extra_inputs.get("PROMPT_PROFILE", DEFAULT_INPUTS["PROMPT_PROFILE"]),
+        "chunk_duration_sec": int(extra_inputs.get("CHUNK_DURATION_SEC", DEFAULT_INPUTS["CHUNK_DURATION_SEC"])),
+        "video_fps": float(extra_inputs.get("VIDEO_FPS", DEFAULT_INPUTS["VIDEO_FPS"])),
+    }
+    if "VIDEO_MAX_PIXELS" in extra_inputs:
+        inputs["video_max_pixels"] = int(extra_inputs["VIDEO_MAX_PIXELS"])
+    if "MAX_NEW_TOKENS" in extra_inputs:
+        inputs["max_new_tokens"] = int(extra_inputs["MAX_NEW_TOKENS"])
+    if "PROMPT_OVERRIDE" in extra_inputs:
+        inputs["prompt_override"] = extra_inputs["PROMPT_OVERRIDE"]
+
+    body = {"input": inputs}
+    url = f"{REPLICATE_API_BASE}/v1/models/{model}/predictions"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Prefer": "wait=10",   # let Replicate hold up to 10s before returning — saves one poll
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode("utf-8", "replace")[:500]
+        return {"error": f"HTTP {e.code}: {body_text}"}
+    except urllib.error.URLError as e:
+        return {"error": f"URL error: {e.reason}"}
+
+
+def replicate_get_prediction(token: str, prediction_id: str) -> dict:
+    """Single GET of a prediction's status."""
+    req = urllib.request.Request(
+        f"{REPLICATE_API_BASE}/v1/predictions/{prediction_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:300]}"}
+
+
+REPLICATE_TERMINAL = {"succeeded", "failed", "canceled"}
+
+
+def replicate_poll_until_terminal(token: str, prediction_id: str, label: str = "",
+                                   max_seconds: int = 1800, poll_interval: int = 15) -> dict:
+    """Loop-poll a prediction every poll_interval seconds until terminal or max_seconds elapsed."""
+    tag = f"[{label}]" if label else f"[{prediction_id[:8]}]"
+    t0 = time.time()
+    last_status = "(initial)"
+    poll_n = 0
+    log(f"{tag} polling prediction={prediction_id} every {poll_interval}s (max {max_seconds // 60} min)", indent=1)
+    while True:
+        elapsed = int(time.time() - t0)
+        if elapsed > max_seconds:
+            log(f"{tag} TIMEOUT after {elapsed}s (last={last_status})", indent=2)
+            return {"status": "timed_out", "error": f"poll exceeded {max_seconds}s"}
+        resp = replicate_get_prediction(token, prediction_id)
+        if "error" in resp and "status" not in resp:
+            log(f"{tag} poll #{poll_n + 1} @ {elapsed}s: API error: {resp['error']}", indent=2)
+            return resp
+        new_status = resp.get("status", "unknown")
+        poll_n += 1
+        if new_status != last_status:
+            log(f"{tag} poll #{poll_n} @ {elapsed}s: {last_status} → {new_status}", indent=2)
+        last_status = new_status
+        if new_status in REPLICATE_TERMINAL:
+            return resp
+        time.sleep(poll_interval)
+
+
+def ingest_video_replicate(token: str, model: str, video: Video, extra_inputs: dict) -> None:
+    """Submit one video to Replicate, block until done. Saves output JSON to
+    video.output_path (same path Deepnote backend uses, for downstream compatibility)."""
+    # Idempotency: skip if output.json already in ~/Downloads/upload/
+    if video.output_path.exists() and video.output_path.stat().st_size > 0:
+        kb = video.output_path.stat().st_size // 1024
+        log(f"[{video.youtube_id}] output.json already present ({kb} KB) — skipping", indent=1)
+        video.status = "success"
+        return
+
+    log(f"[{video.youtube_id}] POSTing to Replicate API (model={model})", indent=1)
+    log(f"[{video.youtube_id}] video_url={video.url}", indent=1)
+    log(f"[{video.youtube_id}] NOTE: Replicate cold-start adds 30-90s if instance scaled to zero", indent=1)
+
+    t0 = time.time()
+    resp = replicate_post(token, model, video, extra_inputs)
+    submit_elapsed = time.time() - t0
+
+    if "error" in resp and "id" not in resp:
+        video.status = "error"
+        video.error = resp["error"]
+        log(f"[{video.youtube_id}] POST FAILED after {submit_elapsed:.0f}s: {video.error}", indent=1)
+        return
+
+    prediction_id = resp.get("id", "")
+    initial_status = resp.get("status", "unknown")
+    video.run_id = prediction_id
+    log(f"[{video.youtube_id}] prediction={prediction_id} initial={initial_status} (post took {submit_elapsed:.0f}s)", indent=1)
+
+    # If Prefer: wait=10 already returned a terminal status, skip polling
+    if initial_status in REPLICATE_TERMINAL:
+        final = resp
+    else:
+        final = replicate_poll_until_terminal(token, prediction_id, label=video.youtube_id,
+                                                max_seconds=1800, poll_interval=15)
+
+    status = final.get("status", "unknown")
+    total_elapsed = time.time() - t0
+
+    if status == "succeeded":
+        output = final.get("output")
+        if not output:
+            video.status = "error"
+            video.error = "Replicate reported succeeded but output is empty"
+            log(f"[{video.youtube_id}] {video.error}", indent=1)
+            return
+        video.output_path.parent.mkdir(parents=True, exist_ok=True)
+        video.output_path.write_text(json.dumps(output, indent=2))
+        kb = video.output_path.stat().st_size // 1024
+        video.status = "success"
+        log(f"[{video.youtube_id}] SUCCESS in {total_elapsed:.0f}s — wrote {kb} KB to {video.output_path}", indent=1)
+    elif status in ("failed", "canceled", "timed_out"):
+        video.status = "error"
+        video.error = str(final.get("error") or final.get("logs", "no error detail"))[:500]
+        log(f"[{video.youtube_id}] {status.upper()} after {total_elapsed:.0f}s: {video.error}", indent=1)
+    else:
+        video.status = status
+        log(f"[{video.youtube_id}] non-terminal status={status} after {total_elapsed:.0f}s", indent=1)
+
+
 def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
                   drive_path: Path | None = None) -> None:
     """Submit one video to Deepnote, block until done (synchronous mode).
@@ -424,7 +592,21 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
 
 
 def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
-                  drive_path: Path | None = None) -> None:
+                  drive_path: Path | None = None,
+                  backend: str = "deepnote",
+                  replicate_model: str = DEFAULT_REPLICATE_MODEL) -> None:
+    # Replicate backend short-circuits the Deepnote-specific path
+    if backend == "replicate":
+        log(f"=== PHASE 2: ingest — {len(videos)} videos via REPLICATE API ===")
+        log(f"Replicate model: {replicate_model}")
+        log(f"Inputs: {extra_inputs}")
+        token = replicate_load_token()
+        for i, video in enumerate(videos, 1):
+            log("")
+            log(f"--- Video {i}/{len(videos)}: {video.youtube_id} ---")
+            ingest_video_replicate(token, replicate_model, video, extra_inputs)
+        return
+
     log(f"=== PHASE 2: ingest — {len(videos)} videos via Deepnote v2 API ===")
     log(f"Notebook: {notebook_id}")
     log(f"Default inputs: {DEFAULT_INPUTS}")
@@ -537,6 +719,13 @@ def main():
                    help=("Read prompt body from PATH and pass as --input PROMPT_OVERRIDE=<content>. "
                          "Bypasses the profile lookup entirely. Use for one-off experiments without "
                          "committing a new profile. Use '-' to read from stdin."))
+    p.add_argument("--backend", default="deepnote", choices=["deepnote", "replicate"],
+                   help=("Inference backend. 'deepnote' (default) runs the notebook on Deepnote "
+                         "via v2 Runs API. 'replicate' calls the deployed Replicate model API "
+                         "at r8.im/ramene/mae-video-ingestion (or --replicate-model). Replicate "
+                         "skips Drive sync entirely — output JSON returns in the API response."))
+    p.add_argument("--replicate-model", default=DEFAULT_REPLICATE_MODEL,
+                   help=f"Replicate model identifier when --backend=replicate (default: {DEFAULT_REPLICATE_MODEL})")
     p.add_argument("--drive-path", default=os.environ.get("DEEPNOTE_DRIVE_PATH"),
                    help=("Local path to the Deepnote 'work' folder via Google Drive Desktop mount "
                          "(e.g. ~/Library/CloudStorage/GoogleDrive-you@gmail.com/My\\ Drive/deepnote-work). "
@@ -616,15 +805,19 @@ def main():
     if args.phase == "download":
         phase_download(videos, args.format)
     elif args.phase == "ingest":
-        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path)
+        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
+                     backend=args.backend, replicate_model=args.replicate_model)
     elif args.phase == "summary":
         phase_summary(videos)
     elif args.phase == "all":
-        phase_download(videos, args.format)
-        if drive_path is None:
-            input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
-        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path)
-        if drive_path is None:
+        # Replicate backend skips download entirely (the API downloads from URL itself)
+        if args.backend == "deepnote":
+            phase_download(videos, args.format)
+            if drive_path is None:
+                input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
+        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
+                     backend=args.backend, replicate_model=args.replicate_model)
+        if args.backend == "deepnote" and drive_path is None:
             input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
         phase_summary(videos)
 
