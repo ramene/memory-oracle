@@ -16,29 +16,22 @@ build:
     - git
     - curl
 
-  # v0.19-compatible shape (pinned cog version because v0.20+ has a
-  # transition bug — uv-based Dockerfile fails at the `uv pip install cog`
-  # step with externally-managed-environment / no-venv error).
-  python_packages:
-    - transformers==5.10.1
-    - accelerate
-    - bitsandbytes==0.49.2
-    - safetensors
-    - sentencepiece
-    - einops
-    - decord==0.6.0
-    - openai-whisper
-    - ffmpeg-python
-    - Pillow
-    - yt-dlp
-    - requests
-    - tqdm
-    - PyYAML
+  # python_packages OMITTED on purpose.
+  #
+  # Both cog v0.19 and v0.20 auto-generate `uv run pip install -r /tmp/requirements.txt`
+  # for python_packages, which fails with PEP 668 externally-managed-environment
+  # because uv's Python install is treated as managed.
+  #
+  # Workaround: do all installs from `run:` commands with --break-system-packages
+  # so we control the pip invocation and bypass the check.
 
-  # Custom-index + --no-deps installs go here (run at build time, in order)
   run:
-    - command: pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
-    - command: pip install --no-deps qwen-vl-utils==0.0.14
+    # PyTorch from cu130 index FIRST (other deps resolve against this torch)
+    - command: pip install --break-system-packages --index-url https://download.pytorch.org/whl/cu130 torch==2.12.0 torchvision torchaudio
+    # Bulk deps (formerly python_packages list)
+    - command: pip install --break-system-packages transformers==5.10.1 accelerate bitsandbytes==0.49.2 safetensors sentencepiece einops decord==0.6.0 openai-whisper ffmpeg-python Pillow yt-dlp requests tqdm PyYAML
+    # qwen-vl-utils last with --no-deps to pin the version without dragging older transformers/torch
+    - command: pip install --break-system-packages --no-deps qwen-vl-utils==0.0.14
 
 # Predictor entrypoint (v0.19 uses `predict:`)
 predict: "predict.py:Predictor"
