@@ -62,12 +62,44 @@ def log(msg: str, indent: int = 0) -> None:
 
 UPLOAD_DIR = Path.home() / "Downloads" / "upload"
 TOKEN_PATH = Path.home() / ".claude" / ".credentials" / "deepnote-api-key.txt"
-DEFAULT_NOTEBOOK_ID = "9b4190e393654580b9314b4bd2c81fed"
+DEFAULT_NOTEBOOK_ID = "271857dce0fd41d681a2d9909742fbab"
 # ↑ Notebook ID changes every time you re-import a .deepnote file.
 # Extract it from the notebook URL: the trailing UUID-without-dashes segment.
 # Override via --notebook-id flag OR `export DEEPNOTE_NOTEBOOK_ID=<id>` before running.
 DEEPNOTE_API_BASE = "https://api.deepnote.com"
 DRIVE_WORK_PATH = "/datasets/_deepnote_work/work"
+
+# GCS staging bucket — closes the manual-drag loop on Deepnote ingest.
+# Notebook supports VIDEO_URL = https URL natively (see v2 notebook §2).
+# Inputs land here under inputs/; outputs (notebook patch) land under outputs/.
+DEFAULT_GCS_BUCKET = "video-ingestion-staging"
+DEFAULT_GCS_PROJECT = "claey-338919"
+# User accounts can't sign URLs (no signing key); impersonate the GAE default SA
+# of the project, which has a managed key. Operator needs roles/iam.serviceAccountTokenCreator
+# on this SA — granted 2026-06-12.
+DEFAULT_GCS_IMPERSONATE_SA = "claey-338919@appspot.gserviceaccount.com"
+GCS_INPUT_PREFIX = "inputs"
+GCS_OUTPUT_PREFIX = "outputs"
+# Signed-URL TTLs. Input URL outlives the notebook cold-start + run; output URL
+# outlives the run + retrieval lag. Both well under the bucket's 1-day lifecycle.
+DEFAULT_INPUT_TTL_HOURS = 6
+DEFAULT_OUTPUT_TTL_HOURS = 12
+
+# YouTube extractor knobs — kills the 3-4 min "yt-dlp sits doing nothing" hang.
+# Operator's working run showed `android_vr` client returns successfully; web/ios
+# clients have been gated by YouTube anti-bot in 2026. Restricting the client
+# list collapses the format-probe to seconds instead of minutes.
+YT_EXTRACTOR_ARGS = "youtube:player_client=android_vr,web_safari"
+# Default to format 18 (pre-muxed 360p mp4 with audio baked in) — no ffmpeg
+# merge needed on the local side. Fall back to other pre-muxed mp4s; never
+# select streams that require ffmpeg merging.
+DEFAULT_FORMAT = "18/best[height<=480][ext=mp4][acodec!=none]/best[ext=mp4]"
+# YouTube channel / playlist URL patterns. When matched, we expand to per-video
+# URLs via yt-dlp --flat-playlist instead of treating as a single video.
+CHANNEL_URL_RE = re.compile(
+    r"^https?://(?:www\.)?youtube\.com/(?:@[\w.-]+(?:/videos)?|c/[\w.-]+(?:/videos)?|channel/[\w-]+(?:/videos)?|playlist\?list=[\w-]+|user/[\w.-]+(?:/videos)?)/?$"
+)
+DEFAULT_MAX_CHANNEL_VIDEOS = 50
 
 # Defaults for the notebook input blocks (matches the v2 trading-education profile)
 DEFAULT_INPUTS = {
@@ -93,9 +125,13 @@ class Video:
     mp4_path: Path | None = None
     output_path: Path | None = None
     run_id: str = ""
-    status: str = "pending"  # pending | downloaded | uploaded | running | success | error
+    status: str = "pending"  # pending | downloaded | staged | uploaded | running | success | error
     error: str = ""
     metadata: dict = field(default_factory=dict)
+    signed_get_url: str = ""   # signed GCS GET URL for the mp4 (set by stage phase)
+    signed_put_url: str = ""   # signed GCS PUT URL for the output JSON (set by stage phase)
+    gcs_input_blob: str = ""   # gs://<bucket>/inputs/<id>.mp4
+    gcs_output_blob: str = ""  # gs://<bucket>/outputs/<id>-output.json
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -110,18 +146,228 @@ def parse_youtube_id(url: str) -> str:
     return m.group(1)
 
 
-def load_urls(urls_file: Path) -> list[Video]:
-    """Read urls.txt: one URL per line, # comments and blanks skipped."""
+def expand_channel_url(url: str, max_videos: int) -> list[str]:
+    """yt-dlp --flat-playlist on a channel / playlist URL → per-video URLs.
+    Caps at max_videos so a 4000-video channel doesn't trigger a runaway batch.
+    Returns the original URL in a 1-element list if not a channel pattern."""
+    if not CHANNEL_URL_RE.match(url):
+        return [url]
+    log(f"channel/playlist URL detected: {url} — expanding via yt-dlp --flat-playlist (max {max_videos})")
+    cmd = [
+        "yt-dlp",
+        "--no-update",
+        "--flat-playlist",
+        "--print", "url",
+        "--playlist-end", str(max_videos),
+        "--extractor-args", YT_EXTRACTOR_ARGS,
+        url,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            log(f"WARN: --flat-playlist exit {result.returncode}: {result.stderr[:200]}", indent=1)
+            return [url]
+        urls = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        log(f"expanded to {len(urls)} videos", indent=1)
+        return urls
+    except subprocess.TimeoutExpired:
+        log(f"WARN: --flat-playlist timeout after 120s — falling back to single URL", indent=1)
+        return [url]
+
+
+def load_urls(urls_file: Path, max_channel_videos: int = DEFAULT_MAX_CHANNEL_VIDEOS) -> list[Video]:
+    """Read urls.txt: one URL per line, # comments and blanks skipped.
+    Channel / playlist URLs are auto-expanded to per-video URLs (capped at
+    max_channel_videos)."""
     videos: list[Video] = []
     for line in urls_file.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        vid = Video(url=line, youtube_id=parse_youtube_id(line))
-        vid.mp4_path = UPLOAD_DIR / f"{vid.youtube_id}.mp4"
-        vid.output_path = UPLOAD_DIR / f"{vid.youtube_id}-output.json"
-        videos.append(vid)
+        expanded = expand_channel_url(line, max_channel_videos)
+        for video_url in expanded:
+            try:
+                vid_id = parse_youtube_id(video_url)
+            except ValueError:
+                log(f"skipping non-YouTube URL after expansion: {video_url}", indent=1)
+                continue
+            vid = Video(url=video_url, youtube_id=vid_id)
+            vid.mp4_path = UPLOAD_DIR / f"{vid.youtube_id}.mp4"
+            vid.output_path = UPLOAD_DIR / f"{vid.youtube_id}-output.json"
+            videos.append(vid)
     return videos
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GCS staging — shell out to `gcloud storage`, no Python SDK dependency
+# ──────────────────────────────────────────────────────────────────────────────
+
+def gcs_upload(local_path: Path, bucket: str, blob_name: str, project: str,
+               impersonate_sa: str = "") -> bool:
+    """Upload local file to gs://<bucket>/<blob_name>. Idempotent: skips upload
+    if the blob already exists with matching size. Returns True on success."""
+    gs_uri = f"gs://{bucket}/{blob_name}"
+    # Check if already uploaded
+    probe = subprocess.run(
+        ["gcloud", "storage", "objects", "describe", gs_uri,
+         "--project", project, "--format=value(size)"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if probe.returncode == 0 and probe.stdout.strip():
+        remote_size = int(probe.stdout.strip())
+        local_size = local_path.stat().st_size
+        if remote_size == local_size:
+            log(f"already in bucket ({remote_size // 1024 // 1024} MB) — skipping upload", indent=2)
+            return True
+    log(f"uploading {local_path.name} ({local_path.stat().st_size // 1024 // 1024} MB) → {gs_uri}", indent=2)
+    t0 = time.time()
+    result = subprocess.run(
+        ["gcloud", "storage", "cp", str(local_path), gs_uri, "--project", project],
+        capture_output=True, text=True, timeout=600,
+    )
+    if result.returncode != 0:
+        log(f"GCS upload FAILED: {result.stderr[:300]}", indent=2)
+        return False
+    log(f"uploaded in {time.time() - t0:.0f}s", indent=2)
+    return True
+
+
+def gcs_sign_url(bucket: str, blob_name: str, project: str, ttl_hours: int,
+                 method: str = "GET", impersonate_sa: str = "") -> str:
+    """Generate a signed URL for GET or PUT. User accounts cannot sign — we
+    must impersonate a service account that has a managed key. Defaults to
+    the GAE default SA of the project (requires
+    roles/iam.serviceAccountTokenCreator on the impersonator's identity).
+    Returns empty string on failure."""
+    gs_uri = f"gs://{bucket}/{blob_name}"
+    cmd = [
+        "gcloud", "storage", "sign-url", gs_uri,
+        "--duration", f"{ttl_hours}h",
+        "--http-verb", method,
+        "--project", project,
+    ]
+    if impersonate_sa:
+        cmd.extend(["--impersonate-service-account", impersonate_sa])
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        log(f"sign-url FAILED ({method}): {result.stderr[:300]}", indent=2)
+        return ""
+    # gcloud emits YAML-ish output; extract the signed_url line
+    for line in result.stdout.splitlines():
+        if line.startswith("signed_url:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def gcs_download(bucket: str, blob_name: str, local_path: Path, project: str,
+                 max_wait_seconds: int = 0) -> bool:
+    """Download gs://<bucket>/<blob_name> to local_path. If max_wait_seconds > 0,
+    poll for blob existence first."""
+    gs_uri = f"gs://{bucket}/{blob_name}"
+    if max_wait_seconds > 0:
+        t0 = time.time()
+        while time.time() - t0 < max_wait_seconds:
+            probe = subprocess.run(
+                ["gcloud", "storage", "objects", "describe", gs_uri,
+                 "--project", project, "--format=value(size)"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if probe.returncode == 0 and probe.stdout.strip():
+                break
+            time.sleep(10)
+        else:
+            return False
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["gcloud", "storage", "cp", gs_uri, str(local_path), "--project", project],
+        capture_output=True, text=True, timeout=120,
+    )
+    return result.returncode == 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PHASE 1.5 — stage (upload to GCS, sign URLs)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def phase_stage(videos: list[Video], bucket: str, project: str,
+                input_ttl_hours: int, output_ttl_hours: int,
+                impersonate_sa: str = "") -> None:
+    """Upload each downloaded mp4 to gs://<bucket>/inputs/, sign a GET URL for it,
+    and pre-sign a PUT URL for gs://<bucket>/outputs/<id>-output.json so the
+    notebook can upload its output directly. Sets signed_get_url / signed_put_url
+    on each Video."""
+    log(f"=== PHASE 1.5: stage — {len(videos)} videos → gs://{bucket}/ ===")
+    log(f"project: {project}")
+    log(f"input TTL: {input_ttl_hours}h | output TTL: {output_ttl_hours}h")
+    log("")
+    t0 = time.time()
+    ok = err = 0
+    for i, video in enumerate(videos, 1):
+        log(f"--- Video {i}/{len(videos)}: {video.youtube_id} ---")
+        if not video.mp4_path or not video.mp4_path.exists():
+            log(f"[{video.youtube_id}] cannot stage: local mp4 missing at {video.mp4_path}", indent=1)
+            video.status = "error"
+            video.error = f"local mp4 missing for stage"
+            err += 1
+            continue
+        input_blob = f"{GCS_INPUT_PREFIX}/{video.youtube_id}.mp4"
+        output_blob = f"{GCS_OUTPUT_PREFIX}/{video.youtube_id}-output.json"
+        if not gcs_upload(video.mp4_path, bucket, input_blob, project):
+            video.status = "error"
+            video.error = "GCS upload failed"
+            err += 1
+            continue
+        get_url = gcs_sign_url(bucket, input_blob, project, input_ttl_hours, "GET", impersonate_sa)
+        put_url = gcs_sign_url(bucket, output_blob, project, output_ttl_hours, "PUT", impersonate_sa)
+        if not get_url:
+            video.status = "error"
+            video.error = "signed GET URL generation failed"
+            err += 1
+            continue
+        # PUT URL is best-effort — older gcloud versions don't sign PUT URLs.
+        # If it fails, ingest still works; output retrieval falls back to Drive.
+        video.signed_get_url = get_url
+        video.signed_put_url = put_url
+        video.gcs_input_blob = input_blob
+        video.gcs_output_blob = output_blob
+        video.status = "staged"
+        log(f"[{video.youtube_id}] staged ✓ (input blob={input_blob}, output blob={output_blob})", indent=1)
+        if not put_url:
+            log(f"[{video.youtube_id}] WARN: PUT URL signing failed — notebook output retrieval will need Drive fallback", indent=1)
+        ok += 1
+    elapsed = time.time() - t0
+    log("")
+    log(f"=== Stage phase complete: {ok}/{len(videos)} staged in {elapsed:.0f}s ===")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PHASE 4 — retrieve (download notebook outputs from GCS)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def phase_retrieve(videos: list[Video], bucket: str, project: str,
+                   max_wait_seconds: int = 300) -> None:
+    """Download <id>-output.json from gs://<bucket>/outputs/ for each video.
+    Polls for blob existence (notebook uploads asynchronously after run completes).
+    Requires the notebook to have been patched to PUT output to OUTPUT_PUT_URL."""
+    log(f"=== PHASE 4: retrieve — {len(videos)} videos from gs://{bucket}/{GCS_OUTPUT_PREFIX}/ ===")
+    log(f"polling for output blobs (max {max_wait_seconds}s per video)")
+    log("")
+    ok = miss = 0
+    for video in videos:
+        if video.output_path.exists() and video.output_path.stat().st_size > 0:
+            log(f"[{video.youtube_id}] output.json already local — skipping retrieve", indent=1)
+            ok += 1
+            continue
+        blob = video.gcs_output_blob or f"{GCS_OUTPUT_PREFIX}/{video.youtube_id}-output.json"
+        if gcs_download(bucket, blob, video.output_path, project, max_wait_seconds):
+            kb = video.output_path.stat().st_size // 1024
+            log(f"[{video.youtube_id}] retrieved ({kb} KB) → {video.output_path}", indent=1)
+            ok += 1
+        else:
+            log(f"[{video.youtube_id}] NOT FOUND in bucket after {max_wait_seconds}s — needs notebook patch (see docs)", indent=1)
+            miss += 1
+    log("")
+    log(f"=== Retrieve phase complete: {ok} retrieved, {miss} missing ===")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -142,11 +388,17 @@ def download_video(video: Video, format_spec: str = "best[height<=360][ext=mp4]"
         "yt-dlp",
         "--no-update",
         "--newline",         # progress on its own line (better with live stream)
+        # Anti-hang: restrict YouTube extractor to clients that actually work in 2026.
+        # The default client list does serial probes that can sit 3-4 min before failing.
+        "--extractor-args", YT_EXTRACTOR_ARGS,
+        "--no-check-formats",   # skip per-format probe (huge speedup, format selector handles fallback)
+        "--socket-timeout", "20",
+        "--retries", "2",
         "-f", format_spec,
         "-o", str(video.mp4_path),
         video.url,
     ]
-    log(f"[{video.youtube_id}] yt-dlp starting — initial network handshake can take 1-3 min before download progress appears", indent=1)
+    log(f"[{video.youtube_id}] yt-dlp starting (android_vr client, no format probe — should download in seconds)", indent=1)
     log(f"[{video.youtube_id}] target: {video.mp4_path}", indent=1)
     log(f"[{video.youtube_id}] command: {' '.join(cmd)}", indent=1)
 
@@ -226,11 +478,42 @@ def load_token() -> str:
     return TOKEN_PATH.read_text().strip()
 
 
+_SSL_CTX = None
+def _ssl_context():
+    """Build an SSLContext that works on macOS conda envs lacking a baked CA bundle.
+    Tries certifi → macOS system store → Python default. Cached after first build."""
+    global _SSL_CTX
+    if _SSL_CTX is not None:
+        return _SSL_CTX
+    import ssl
+    try:
+        import certifi
+        _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+        return _SSL_CTX
+    except ImportError:
+        pass
+    sys_ca = Path("/etc/ssl/cert.pem")
+    if sys_ca.exists():
+        _SSL_CTX = ssl.create_default_context(cafile=str(sys_ca))
+        return _SSL_CTX
+    _SSL_CTX = ssl.create_default_context()
+    return _SSL_CTX
+
+
 def deepnote_post(token: str, notebook_id: str, video: Video, extra_inputs: dict) -> dict:
-    """POST a single run to Deepnote v2 API. Returns parsed JSON response."""
+    """POST a single run to Deepnote v2 API. Returns parsed JSON response.
+    If video.signed_get_url is set (stage phase ran), VIDEO_URL is the signed
+    GCS URL — notebook downloads it directly, NO Drive sync needed.
+    If video.signed_put_url is set, OUTPUT_PUT_URL is included so a patched
+    notebook can upload its output JSON straight back to the bucket."""
     inputs = dict(DEFAULT_INPUTS)
-    inputs["VIDEO_URL"] = f"{DRIVE_WORK_PATH}/{video.youtube_id}.mp4"
+    if video.signed_get_url:
+        inputs["VIDEO_URL"] = video.signed_get_url
+    else:
+        inputs["VIDEO_URL"] = f"{DRIVE_WORK_PATH}/{video.youtube_id}.mp4"
     inputs["OUTPUT_PATH"] = f"{DRIVE_WORK_PATH}/{video.youtube_id}-output.json"
+    if video.signed_put_url:
+        inputs["OUTPUT_PUT_URL"] = video.signed_put_url
     inputs.update(extra_inputs)
 
     body = {
@@ -249,7 +532,7 @@ def deepnote_post(token: str, notebook_id: str, video: Video, extra_inputs: dict
     )
     try:
         # Synchronous mode — request blocks until run completes or 10min timeout
-        with urllib.request.urlopen(req, timeout=1200) as resp:
+        with urllib.request.urlopen(req, timeout=1200, context=_ssl_context()) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.read().decode()[:300]}"}
@@ -264,7 +547,7 @@ def deepnote_get_run(token: str, run_id: str) -> dict:
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.read().decode()[:300]}"}
@@ -385,7 +668,7 @@ def replicate_latest_version(token: str, model: str) -> str:
     url = f"{REPLICATE_API_BASE}/v1/models/{model}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
             d = json.loads(resp.read().decode())
             v = d.get("latest_version") or {}
             return v.get("id", "")
@@ -432,7 +715,7 @@ def replicate_post(token: str, model: str, video: Video, extra_inputs: dict,
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=60, context=_ssl_context()) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body_text = e.read().decode("utf-8", "replace")[:500]
@@ -451,7 +734,7 @@ def replicate_get_prediction(token: str, prediction_id: str) -> dict:
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:300]}"}
@@ -562,11 +845,15 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
         log(f"[{video.youtube_id}] waiting 30s for Drive→Deepnote sync before submission", indent=1)
         time.sleep(30)
 
-    if not video.mp4_path or not video.mp4_path.exists():
-        video.status = "error"
-        video.error = f"mp4 not found at {video.mp4_path} — was it uploaded to Deepnote work folder?"
-        log(f"[{video.youtube_id}] SKIP: {video.error}", indent=1)
-        return
+    # Local mp4 check only matters when we're NOT using the GCS signed-URL path.
+    # If signed_get_url is set, the notebook fetches the video over HTTPS from
+    # the bucket — no local mp4 needed at ingest time.
+    if not video.signed_get_url:
+        if not video.mp4_path or not video.mp4_path.exists():
+            video.status = "error"
+            video.error = f"mp4 not found at {video.mp4_path} and no signed URL — run stage phase first OR upload to Deepnote work folder"
+            log(f"[{video.youtube_id}] SKIP: {video.error}", indent=1)
+            return
 
     # Idempotency: skip if output.json already in ~/Downloads/upload/
     if video.output_path.exists() and video.output_path.stat().st_size > 0:
@@ -576,8 +863,13 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
         return
 
     log(f"[{video.youtube_id}] POSTing to Deepnote v2 Runs API (synchronous mode — blocks up to 20 min while notebook runs)", indent=1)
-    log(f"[{video.youtube_id}] VIDEO_URL={DRIVE_WORK_PATH}/{video.youtube_id}.mp4", indent=1)
+    if video.signed_get_url:
+        log(f"[{video.youtube_id}] VIDEO_URL=<signed GCS URL, {len(video.signed_get_url)} chars>", indent=1)
+    else:
+        log(f"[{video.youtube_id}] VIDEO_URL={DRIVE_WORK_PATH}/{video.youtube_id}.mp4", indent=1)
     log(f"[{video.youtube_id}] OUTPUT_PATH={DRIVE_WORK_PATH}/{video.youtube_id}-output.json", indent=1)
+    if video.signed_put_url:
+        log(f"[{video.youtube_id}] OUTPUT_PUT_URL=<signed PUT URL> (requires notebook patch — see docs)", indent=1)
     log(f"[{video.youtube_id}] NOTE: Deepnote machine cold-start adds 2-5 min if no machine running", indent=1)
 
     t0 = time.time()
@@ -725,13 +1017,35 @@ def main():
         pass  # Python <3.7 fallback
 
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("phase", choices=["download", "ingest", "summary", "all", "wait"],
-                   help="Which phase to run. 'all' runs download then ingest then summary, but ingest will fail if you haven't uploaded to Deepnote work folder yet. 'wait' takes a runId in place of urls_file and polls until terminal.")
-    p.add_argument("urls_file", type=str, help="Path to urls.txt (one YouTube URL per line) — OR a Deepnote runId when phase=wait")
+    p.add_argument("phase", choices=["download", "stage", "ingest", "retrieve", "summary", "all", "wait"],
+                   help=("Which phase to run. 'all' chains download → stage → ingest → retrieve → summary "
+                         "for fully automated direct-POST. 'stage' uploads downloaded mp4s to GCS and signs URLs. "
+                         "'retrieve' pulls output JSON back from GCS (needs notebook patch). 'wait' takes "
+                         "a runId in place of urls_file."))
+    p.add_argument("urls_file", type=str, help="Path to urls.txt (URLs, channels, playlists — auto-expanded) — OR a Deepnote runId when phase=wait")
     p.add_argument("--notebook-id", default=os.environ.get("DEEPNOTE_NOTEBOOK_ID", DEFAULT_NOTEBOOK_ID),
                    help=f"Deepnote notebook ID (default: {DEFAULT_NOTEBOOK_ID})")
-    p.add_argument("--format", default="best[height<=360][ext=mp4]",
-                   help="yt-dlp format spec (default: best[height<=360][ext=mp4])")
+    p.add_argument("--format", default=DEFAULT_FORMAT,
+                   help=f"yt-dlp format spec (default: {DEFAULT_FORMAT}). Prefers pre-muxed formats so ffmpeg isn't needed locally.")
+    p.add_argument("--gcs-bucket", default=os.environ.get("VIDEO_GCS_BUCKET", DEFAULT_GCS_BUCKET),
+                   help=f"GCS staging bucket name (default: {DEFAULT_GCS_BUCKET}). Used by stage + retrieve phases.")
+    p.add_argument("--gcs-project", default=os.environ.get("VIDEO_GCS_PROJECT", DEFAULT_GCS_PROJECT),
+                   help=f"GCP project owning the bucket (default: {DEFAULT_GCS_PROJECT}).")
+    p.add_argument("--gcs-impersonate-sa", default=os.environ.get("VIDEO_GCS_IMPERSONATE_SA", DEFAULT_GCS_IMPERSONATE_SA),
+                   help=(f"Service account to impersonate for sign-url (default: {DEFAULT_GCS_IMPERSONATE_SA}). "
+                         "User accounts can't sign URLs; this SA must have a managed key (GAE default SA "
+                         "always does). Caller needs roles/iam.serviceAccountTokenCreator on this SA. "
+                         "Set to empty string to skip impersonation if you have a service-account JSON key activated."))
+    p.add_argument("--no-gcs", action="store_true",
+                   help="Disable GCS staging entirely — fall back to legacy Drive-sync path (ingest uses local Deepnote path).")
+    p.add_argument("--input-ttl-hours", type=int, default=DEFAULT_INPUT_TTL_HOURS,
+                   help=f"Signed-GET-URL TTL for input mp4 (default: {DEFAULT_INPUT_TTL_HOURS}h)")
+    p.add_argument("--output-ttl-hours", type=int, default=DEFAULT_OUTPUT_TTL_HOURS,
+                   help=f"Signed-PUT-URL TTL for output JSON (default: {DEFAULT_OUTPUT_TTL_HOURS}h)")
+    p.add_argument("--max-channel-videos", type=int, default=DEFAULT_MAX_CHANNEL_VIDEOS,
+                   help=f"Per-channel-URL cap when expanding via --flat-playlist (default: {DEFAULT_MAX_CHANNEL_VIDEOS}). Stops a 4000-video channel from triggering a runaway batch.")
+    p.add_argument("--retrieve-max-wait", type=int, default=300,
+                   help="Max seconds to poll bucket for each output JSON during retrieve phase (default: 300)")
     p.add_argument("--input", action="append", default=[], metavar="KEY=VALUE",
                    help="Override a Deepnote input block (e.g. --input CHUNK_DURATION_SEC=600). Can be repeated.")
     p.add_argument("--profile", default=None,
@@ -786,7 +1100,7 @@ def main():
     if not urls_path.exists():
         sys.exit(f"FATAL: urls file not found: {urls_path}")
 
-    videos = load_urls(urls_path)
+    videos = load_urls(urls_path, max_channel_videos=args.max_channel_videos)
     if not videos:
         sys.exit(f"FATAL: no URLs in {urls_path}")
 
@@ -827,23 +1141,54 @@ def main():
         log(f"  - {v.youtube_id}  ({v.url})", indent=1)
     log("")
 
+    use_gcs = not args.no_gcs
+
     if args.phase == "download":
         phase_download(videos, args.format)
+    elif args.phase == "stage":
+        if not use_gcs:
+            sys.exit("FATAL: stage phase requires GCS — drop --no-gcs to enable")
+        phase_stage(videos, args.gcs_bucket, args.gcs_project,
+                    args.input_ttl_hours, args.output_ttl_hours,
+                    impersonate_sa=args.gcs_impersonate_sa)
     elif args.phase == "ingest":
+        # Auto-stage if GCS enabled and signed_get_url not set (running ingest in isolation)
+        if use_gcs and args.backend == "deepnote" and not any(v.signed_get_url for v in videos):
+            log("auto-staging before ingest (use --no-gcs to skip)")
+            phase_stage(videos, args.gcs_bucket, args.gcs_project,
+                        args.input_ttl_hours, args.output_ttl_hours,
+                        impersonate_sa=args.gcs_impersonate_sa)
+            log("")
         phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
                      backend=args.backend, replicate_model=args.replicate_model)
+    elif args.phase == "retrieve":
+        phase_retrieve(videos, args.gcs_bucket, args.gcs_project, args.retrieve_max_wait)
     elif args.phase == "summary":
         phase_summary(videos)
     elif args.phase == "all":
-        # Replicate backend skips download entirely (the API downloads from URL itself)
-        if args.backend == "deepnote":
-            phase_download(videos, args.format)
+        # Replicate backend short-circuits download (the API fetches from URL itself)
+        if args.backend == "replicate":
+            phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
+                         backend=args.backend, replicate_model=args.replicate_model)
+            phase_summary(videos)
+            return
+        # Deepnote backend: download → stage → ingest → retrieve → summary
+        phase_download(videos, args.format)
+        if use_gcs:
+            phase_stage(videos, args.gcs_bucket, args.gcs_project,
+                        args.input_ttl_hours, args.output_ttl_hours,
+                        impersonate_sa=args.gcs_impersonate_sa)
+            phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
+                         backend=args.backend, replicate_model=args.replicate_model)
+            phase_retrieve(videos, args.gcs_bucket, args.gcs_project, args.retrieve_max_wait)
+        else:
+            # Legacy path — operator drags files manually
             if drive_path is None:
                 input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
-        phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
-                     backend=args.backend, replicate_model=args.replicate_model)
-        if args.backend == "deepnote" and drive_path is None:
-            input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
+            phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
+                         backend=args.backend, replicate_model=args.replicate_model)
+            if drive_path is None:
+                input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
         phase_summary(videos)
 
 
