@@ -218,6 +218,26 @@ def render_lesson_md(item: dict, extraction: dict | None) -> str:
 
     chunks = extraction.get("chunks") or []
 
+    # Quality flag: if EVERY chunk is just an _inference_error stub, the
+    # kernel produced no real signal — usually a warm-kernel OOM/state-leak
+    # symptom even when batch_ingest reported "success".  Surface it loudly
+    # so the operator doesn't curate a hollow note.
+    inference_errors = sum(
+        1 for c in chunks
+        if set((c.get("signal") or {}).keys()) <= {"_inference_error"}
+    )
+    if chunks and inference_errors == len(chunks):
+        body.append("> [!warning] **Extraction returned `_inference_error` on every chunk.**")
+        body.append(">")
+        body.append(f"> Likely cause: warm-kernel state corruption / GPU memory leak.")
+        cs = extraction.get('cuda_stats') or {}
+        if cs:
+            body.append(f"> CUDA at run time: post-cleanup {cs.get('free_mb_post_cleanup', '?')} MB free, "
+                        f"model_consumed {cs.get('model_consumed_mb', '?')} MB, "
+                        f"load_sec {cs.get('model_load_sec', '?')}.")
+        body.append("> **Don't curate this note** — re-run after restarting the Deepnote machine.")
+        body.append("")
+
     # The signal sections — laid out so the operator can read top-to-bottom
     # without jumping back and forth.  Each section is gated on having content.
     seg_summary = first_signal(chunks, "segment_summary")
