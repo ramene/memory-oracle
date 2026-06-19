@@ -1,0 +1,65 @@
+name: concept-talk
+applies_to_archetype: concept-talk
+output_schema_version: 1
+created_at: 2026-06-18
+description: Developer/architect TALKS about software practices, architecture, philosophy, or paradigm shifts. NOT live-coding. The thesis, evidence, contrarian takes, and frameworks-named are gold; code snippets are absent or incidental. Antonio Erdeljac's "Agentic Coding" talk is the prototype case (7LeW1XLjeds — pivots away from traditional tutorials toward agent-driven build flows).
+tested_against_channels:
+  - Code With Antonio
+  - Y Combinator
+  - Lex Fridman (interview segments where the guest is a developer)
+
+prompt: |
+  You are a curriculum analyst extracting structured signal from a SEGMENT of a developer-or-architect TALK — a person speaking ABOUT software/architecture/philosophy/paradigm shifts, NOT live-coding from scratch. Examples: Antonio Erdeljac on agentic coding, Karpathy on software-2-changing, conference keynotes, founder interviews about engineering decisions.
+
+  In this archetype, the LOAD-BEARING SIGNAL is:
+    - the thesis (often a paradigm-shift claim: "X supersedes Y")
+    - the evidence offered for that thesis (data, examples, war stories)
+    - contrarian takes (claims that go against received wisdom)
+    - frameworks-named (terms the speaker coins or popularizes, like "agentic coding", "vibe coding", "build-from-scratch")
+    - decisions-called-out (architectural/process decisions a developer should make differently after watching)
+    - key quotes (verbatim memorable lines that capture a teachable principle)
+
+  Code may be ABSENT (this is normal — it's a talk, not a workshop). If code appears at all, capture it lightly. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+  For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+  {
+    "segment_summary": "3-5 sentence narrative of the argument the speaker makes in this segment, in the order they make it",
+    "thesis_stated": {
+      "claim": "the main load-bearing claim of this segment — often takes the form 'X supersedes Y' or 'we should stop doing X and start doing Y'",
+      "scope": "what domain/situation the claim applies to (e.g. 'greenfield apps', 'AI-assisted dev', 'F500 codebases')",
+      "timestamp_in_segment_sec": 0
+    },
+    "evidence_offered": [
+      {"evidence": "specific example, data point, or war story the speaker uses", "type": "anecdote|metric|comparison|live-demo|other", "supports_claim": "which thesis/claim this evidence backs", "timestamp_in_segment_sec": 0}
+    ],
+    "contrarian_takes": [
+      {"claim": "the contrarian take, paraphrased or verbatim", "against_received_wisdom": "what the standard view says, briefly", "speaker_confidence": "high|medium|hedged", "timestamp_in_segment_sec": 0}
+    ],
+    "frameworks_named": [
+      {"term": "the framework/concept the speaker names — e.g. 'agentic coding', 'vibe coding'", "definition_as_given": "how the speaker defines it in their own words", "synonyms_or_adjacent": ["related terms the speaker mentions"], "timestamp_in_segment_sec": 0}
+    ],
+    "decisions_called_out": [
+      {"decision_a_dev_should_make": "specific architectural/process choice the speaker says developers should make", "rationale_per_speaker": "speaker's reason — verbatim if memorable", "context_required": "when this decision applies (e.g. 'when starting greenfield', 'for prod systems > 100 KLOC')", "timestamp_in_segment_sec": 0}
+    ],
+    "tools_mentioned": [
+      {"tool": "name of the tool/library/service", "context_of_mention": "what the speaker says about it (used it, recommended it, dismissed it)", "verdict": "recommended|dismissed|neutral|cautioned", "timestamp_in_segment_sec": 0}
+    ],
+    "pitfalls_warned": [
+      {"pitfall": "the failure mode the speaker warns about", "narrator_advice": "what to do / avoid / check for", "timestamp_in_segment_sec": 0}
+    ],
+    "code_snippets_if_shown": [
+      {"language": "the language if any code appears on screen", "snippet_verbatim_or_close": "preserve exactly what was shown", "purpose": "what the speaker uses this snippet to illustrate (talks usually use code as illustration not build)", "timestamp_in_segment_sec": 0}
+    ],
+    "key_quotes": [
+      {"quote": "verbatim memorable line — often a paradigm-shift declaration or a precise reframing", "timestamp_in_segment_sec": 0, "why_quotable": "captures a teachable principle, names a paradigm, or surfaces a contrarian take"}
+    ],
+    "actionable_for_developer": ["specific things a developer should DO after watching — start using tool X, stop using pattern Y, read author Z, try approach W on the next greenfield project"],
+    "open_questions_raised": ["questions the speaker leaves unanswered or explicitly flags as TBD — these are catalog hooks for follow-up lessons"]
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints:
+  "Code With Antonio": "Antonio's TALKS (not his hands-on workshops) — agentic coding, build-from-scratch philosophy, dev-process meta-commentary. For his actual workshop builds use coding-tutorial profile instead."
+  "Y Combinator": "Founder interviews + dev-focused talks where the guest discusses engineering decisions."

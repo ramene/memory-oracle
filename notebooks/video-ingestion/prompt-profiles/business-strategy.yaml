@@ -1,0 +1,115 @@
+name: business-strategy
+applies_to_archetype: business-strategy
+output_schema_version: 1
+created_at: 2026-06-18
+description: Business / brand / founder strategy lessons — courses teaching positioning, brand pillars, purpose statements, market entry, customer personas, GTM playbooks. NOT live-coding, NOT pure concept talks. The signal is FRAMEWORKS TAUGHT, exercises/worksheets shown, named case studies, and explicit actionable steps a founder is meant to take after watching.
+tested_against_channels:
+  - SANET ST courses
+  - Founder strategy / brand-building course content
+
+prompt: |
+  You are a curriculum analyst extracting structured signal from a SEGMENT of a business / brand / startup strategy lesson video.  These are TAUGHT lessons (not talks, not live-coding) where an instructor presents named frameworks, hands the viewer worksheets/exercises, references case studies, and prescribes specific next actions a founder should take.
+
+  In this archetype, the LOAD-BEARING SIGNAL is:
+    - frameworks_taught (named methods like "The Four Brand Pillars", "Purpose Statement Method", "Positioning Gap Analysis")
+    - exercises_or_worksheets_shown (concrete steps the viewer is told to do)
+    - case_studies_referenced (named brands/companies used as examples)
+    - decisions_a_founder_should_make (the lesson's prescriptive ask)
+    - key_definitions (terms the instructor defines — these become teachable vocabulary)
+    - common_mistakes_warned (failure modes the instructor explicitly warns about)
+    - key_quotes (memorable lines that capture a principle)
+    - actionable_for_founder (specific things the viewer should DO after watching)
+
+  Code is almost always ABSENT — leave related fields empty. Slides / whiteboard / worksheet imagery IS common; capture it under visual_examples_described. If the segment does not actually state something, leave the field empty — do NOT invent.
+
+  For THIS SEGMENT, return STRICT JSON with these exact fields. Use empty arrays / null / empty strings for fields with no signal.
+
+  {
+    "segment_summary": "3-5 sentence narrative of what the instructor teaches in this segment, in the order they teach it",
+    "frameworks_taught": [
+      {
+        "framework_name": "the named framework — verbatim if memorable (e.g. 'The Four Brand Pillars')",
+        "components": ["if the framework has named parts, list them in the order taught"],
+        "what_it_solves": "the problem this framework addresses — instructor's framing",
+        "when_to_apply": "the context the instructor says this framework applies in",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "exercises_or_worksheets_shown": [
+      {
+        "exercise_name": "name or description of the exercise",
+        "what_the_founder_does": "verbatim or paraphrased steps the viewer is told to perform",
+        "expected_output": "what the exercise produces (a positioning statement, a persona one-pager, etc.)",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "case_studies_referenced": [
+      {
+        "brand_or_company": "named example — Patagonia, Liquid Death, Airbnb, etc.",
+        "what_they_did": "the specific decision or move the instructor highlights",
+        "lesson_drawn": "what the instructor wants the viewer to learn from this case",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "key_definitions": [
+      {
+        "term": "the term being defined",
+        "definition_as_given": "verbatim or close-paraphrase of the instructor's definition",
+        "distinguished_from": "if the instructor contrasts this term with another, name the contrast",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "decisions_a_founder_should_make": [
+      {
+        "decision": "the specific choice the instructor frames as load-bearing",
+        "criteria_offered": "how the instructor says to make the call",
+        "context_required": "when this decision applies (stage, sector, market type)",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "common_mistakes_warned": [
+      {
+        "mistake": "the failure mode the instructor warns about",
+        "why_it_fails": "the instructor's explanation",
+        "instructor_advice": "what to do instead",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "metrics_or_thresholds_stated": [
+      {
+        "metric": "name of the metric the instructor mentions",
+        "value_or_rule_of_thumb": "the number or heuristic stated",
+        "context": "when this metric is the right one to use",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "tools_or_resources_recommended": [
+      {
+        "name": "tool / book / framework / template",
+        "purpose_per_instructor": "what the instructor uses it for",
+        "verdict": "recommended | required | optional | cautioned",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "visual_examples_described": [
+      {
+        "what_was_shown": "the slide / diagram / worksheet / whiteboard contents",
+        "purpose": "what the visual was illustrating",
+        "timestamp_in_segment_sec": 0
+      }
+    ],
+    "key_quotes": [
+      {
+        "quote": "verbatim memorable line — often a definitional statement or sharp reframe",
+        "timestamp_in_segment_sec": 0,
+        "why_quotable": "captures a teachable principle or a contrarian reframe"
+      }
+    ],
+    "actionable_for_founder": ["specific things a founder should DO after watching — fill in the purpose worksheet, audit the existing brand against the four pillars, interview 5 customers with the persona-blueprint questions, etc."],
+    "open_questions_raised": ["unresolved questions the instructor leaves for the viewer to answer or that hook into the next lesson"]
+  }
+
+  Return ONLY the JSON object, no preamble.
+
+channel_hints:
+  "SANET ST": "SANET ST course materials — brand-building, startup positioning, founder GTM lessons."

@@ -62,10 +62,14 @@ def log(msg: str, indent: int = 0) -> None:
 
 UPLOAD_DIR = Path.home() / "Downloads" / "upload"
 TOKEN_PATH = Path.home() / ".claude" / ".credentials" / "deepnote-api-key.txt"
-DEFAULT_NOTEBOOK_ID = "271857dce0fd41d681a2d9909742fbab"
+DEFAULT_NOTEBOOK_ID = "2bb7ec4d2a7c4fdd8faf190e32ff8c45"
 # ↑ Notebook ID changes every time you re-import a .deepnote file.
 # Extract it from the notebook URL: the trailing UUID-without-dashes segment.
 # Override via --notebook-id flag OR `export DEEPNOTE_NOTEBOOK_ID=<id>` before running.
+# 2026-06-18: re-imported D2 patch (CUDA-stats observability §5+§8) into the
+# "native-video" project (id ae2b2f17-fb74-43bf-a749-b5a5b8a163c8) of the
+# Ramene-Anthony workspace (id 9935bbbd-4ac8-49e6-8b7f-46ee3295cbbf).
+# Prior ID: 271857dce0fd41d681a2d9909742fbab.
 DEEPNOTE_API_BASE = "https://api.deepnote.com"
 DRIVE_WORK_PATH = "/datasets/_deepnote_work/work"
 
@@ -120,18 +124,47 @@ YOUTUBE_ID_RE = re.compile(
 
 @dataclass
 class Video:
-    url: str
-    youtube_id: str = ""
+    """Source-agnostic video record.
+
+    `short_id` is the primary key used for GCS naming, output JSON file
+    naming, and log lines.  For YouTube videos it equals the 11-char YT ID
+    (no hash needed — already unique).  For other sources (workshops,
+    podcasts, local files) we derive `short_id = sha1(full_label)[:11]`,
+    which preserves the same 11-char shape so the GCS layout is uniform.
+
+    `full_label` is the human-readable label that survives end-to-end:
+    log lines, manifest, and the obsidian-curation writer rely on it to
+    rejoin extracted output with the source meaning.  Never truncated.
+
+    `source_type` discriminates the upstream source ("youtube" |
+    "workshop" | "local" | ...) so downstream tools can branch on origin
+    without parsing filenames.
+
+    `source_metadata` is an arbitrary-shape dict that carries origin-
+    specific data (workshop_slug, chapter_idx, muxPlaybackId, channel,
+    uploaded_at, ...).  Passed through to the obsidian writer.
+    """
+    url: str = ""             # canonical source URL if any (empty for pure-local sources)
+    short_id: str = ""        # 11-char primary key — YT ID for youtube, sha1[:11] otherwise
+    full_label: str = ""      # human-readable, non-truncated — e.g. "build-and-deploy-a-cursor-clone-ch01-intro"
+    source_type: str = "youtube"  # youtube | workshop | local | other
+    source_metadata: dict = field(default_factory=dict)  # source-specific (workshop_slug, chapter_idx, mux_id, ...)
     mp4_path: Path | None = None
     output_path: Path | None = None
     run_id: str = ""
     status: str = "pending"  # pending | downloaded | staged | uploaded | running | success | error
     error: str = ""
-    metadata: dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)  # processing metadata (run-id, retries, etc.)
     signed_get_url: str = ""   # signed GCS GET URL for the mp4 (set by stage phase)
     signed_put_url: str = ""   # signed GCS PUT URL for the output JSON (set by stage phase)
-    gcs_input_blob: str = ""   # gs://<bucket>/inputs/<id>.mp4
-    gcs_output_blob: str = ""  # gs://<bucket>/outputs/<id>-output.json
+    gcs_input_blob: str = ""   # gs://<bucket>/inputs/<short_id>.mp4
+    gcs_output_blob: str = ""  # gs://<bucket>/outputs/<short_id>-output.json
+
+    @property
+    def youtube_id(self) -> str:
+        """Backward-compat alias for callers that still expect youtube_id.
+        Prefer .short_id in new code — works for any source."""
+        return self.short_id
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -191,10 +224,103 @@ def load_urls(urls_file: Path, max_channel_videos: int = DEFAULT_MAX_CHANNEL_VID
             except ValueError:
                 log(f"skipping non-YouTube URL after expansion: {video_url}", indent=1)
                 continue
-            vid = Video(url=video_url, youtube_id=vid_id)
-            vid.mp4_path = UPLOAD_DIR / f"{vid.youtube_id}.mp4"
-            vid.output_path = UPLOAD_DIR / f"{vid.youtube_id}-output.json"
+            vid = Video(
+                url=video_url,
+                short_id=vid_id,
+                full_label=vid_id,  # YouTube ID is the most useful label we have at load time
+                source_type="youtube",
+                source_metadata={"video_url": video_url},
+            )
+            vid.mp4_path = UPLOAD_DIR / f"{vid.short_id}.mp4"
+            vid.output_path = UPLOAD_DIR / f"{vid.short_id}-output.json"
             videos.append(vid)
+    return videos
+
+
+def _short_id_from_label(label: str, length: int = 11) -> str:
+    """Derive a deterministic 11-char primary key from a human label.
+    Matches YouTube's 11-char ID shape so the GCS layout is uniform across
+    source types.  SHA1 is fine here — we need stability + low-collision,
+    not cryptographic strength."""
+    import hashlib
+    return hashlib.sha1(label.encode("utf-8")).hexdigest()[:length]
+
+
+def load_manifest(manifest_path: Path) -> list[Video]:
+    """Load videos from a manifest JSON.  Source-agnostic input mode.
+
+    Walker-emitted manifests (e.g. walk-codewithantonio-workshop.mjs) have
+    this shape:
+
+        {
+          "workshop_slug": "build-and-deploy-a-cursor-clone",
+          "chapters": [
+            {
+              "chapter_idx": 1,
+              "slug": "intro~jre5c",
+              "title": "Intro",
+              "mp4_path": "/abs/path/to/chapter-01.mp4",
+              "muxPlaybackId": "Tg00nb..."  # optional, source-specific
+            },
+            ...
+          ]
+        }
+
+    We accept this shape AND a generic flat form:
+
+        {
+          "source_type": "podcast",
+          "items": [
+            {"full_label": "ep042-deepnote-bench", "mp4_path": "..."}
+          ]
+        }
+
+    Either way we produce Video records with short_id = sha1(full_label)[:11].
+    The full label survives end-to-end in source_metadata for the obsidian
+    writer to rejoin with extracted output.
+    """
+    data = json.loads(manifest_path.read_text())
+    videos: list[Video] = []
+
+    workshop_slug = data.get("workshop_slug")
+    source_type = data.get("source_type") or ("workshop" if workshop_slug else "local")
+    items = data.get("chapters") or data.get("items") or []
+
+    for entry in items:
+        mp4 = entry.get("mp4_path")
+        if not mp4:
+            continue
+        # Build full_label: workshop chapters use <workshop>-ch<NN>-<slug-name>;
+        # generic items use the user-provided full_label.
+        if workshop_slug and "chapter_idx" in entry:
+            slug_name = (entry.get("slug") or "").split("~")[0]
+            full_label = f"{workshop_slug}-ch{int(entry['chapter_idx']):02d}-{slug_name}"
+        else:
+            full_label = entry.get("full_label") or Path(mp4).stem
+        short_id = entry.get("short_id_override") or _short_id_from_label(full_label)
+
+        # source_metadata carries everything the obsidian writer might need
+        # (chapter index, title, playback id, …) without polluting the core
+        # Video schema.
+        source_meta = {k: v for k, v in entry.items()
+                       if k not in ("mp4_path", "short_id_override")}
+        source_meta["manifest_path"] = str(manifest_path)
+        if workshop_slug:
+            source_meta["workshop_slug"] = workshop_slug
+
+        vid = Video(
+            url="",  # no canonical URL for local-sourced MP4s
+            short_id=short_id,
+            full_label=full_label,
+            source_type=source_type,
+            source_metadata=source_meta,
+        )
+        vid.mp4_path = Path(mp4).expanduser()
+        vid.output_path = UPLOAD_DIR / f"{vid.short_id}-output.json"
+        videos.append(vid)
+
+    log(f"manifest loaded: {len(videos)} item(s) — source_type={source_type}"
+        + (f" workshop={workshop_slug}" if workshop_slug else ""))
     return videos
 
 
@@ -205,20 +331,31 @@ def load_urls(urls_file: Path, max_channel_videos: int = DEFAULT_MAX_CHANNEL_VID
 def gcs_upload(local_path: Path, bucket: str, blob_name: str, project: str,
                impersonate_sa: str = "") -> bool:
     """Upload local file to gs://<bucket>/<blob_name>. Idempotent: skips upload
-    if the blob already exists with matching size. Returns True on success."""
+    if the blob already exists with matching size. Returns True on success.
+
+    The existence probe is best-effort — if gcloud is being slow (seen in
+    practice as 30+s for `objects describe` when the local network is
+    congested), we DON'T abort: just log a warning and proceed with the
+    upload.  gcloud cp is idempotent enough at the storage layer that
+    re-uploading an existing object is at worst wasted bandwidth, never
+    data corruption.
+    """
     gs_uri = f"gs://{bucket}/{blob_name}"
-    # Check if already uploaded
-    probe = subprocess.run(
-        ["gcloud", "storage", "objects", "describe", gs_uri,
-         "--project", project, "--format=value(size)"],
-        capture_output=True, text=True, timeout=30,
-    )
-    if probe.returncode == 0 and probe.stdout.strip():
-        remote_size = int(probe.stdout.strip())
-        local_size = local_path.stat().st_size
-        if remote_size == local_size:
-            log(f"already in bucket ({remote_size // 1024 // 1024} MB) — skipping upload", indent=2)
-            return True
+    # Check if already uploaded — best effort; tolerate timeouts.
+    try:
+        probe = subprocess.run(
+            ["gcloud", "storage", "objects", "describe", gs_uri,
+             "--project", project, "--format=value(size)"],
+            capture_output=True, text=True, timeout=90,
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            remote_size = int(probe.stdout.strip())
+            local_size = local_path.stat().st_size
+            if remote_size == local_size:
+                log(f"already in bucket ({remote_size // 1024 // 1024} MB) — skipping upload", indent=2)
+                return True
+    except subprocess.TimeoutExpired:
+        log(f"WARN: GCS probe timed out after 90s — proceeding with upload anyway", indent=2)
     log(f"uploading {local_path.name} ({local_path.stat().st_size // 1024 // 1024} MB) → {gs_uri}", indent=2)
     t0 = time.time()
     result = subprocess.run(
@@ -248,7 +385,13 @@ def gcs_sign_url(bucket: str, blob_name: str, project: str, ttl_hours: int,
     ]
     if impersonate_sa:
         cmd.extend(["--impersonate-service-account", impersonate_sa])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    # Sign-url calls can also be slow under network congestion (similar to
+    # describe).  Allow 90s before giving up.
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+    except subprocess.TimeoutExpired:
+        log(f"sign-url TIMEOUT after 90s ({method})", indent=2)
+        return ""
     if result.returncode != 0:
         log(f"sign-url FAILED ({method}): {result.stderr[:300]}", indent=2)
         return ""
@@ -267,11 +410,15 @@ def gcs_download(bucket: str, blob_name: str, local_path: Path, project: str,
     if max_wait_seconds > 0:
         t0 = time.time()
         while time.time() - t0 < max_wait_seconds:
-            probe = subprocess.run(
-                ["gcloud", "storage", "objects", "describe", gs_uri,
-                 "--project", project, "--format=value(size)"],
-                capture_output=True, text=True, timeout=30,
-            )
+            try:
+                probe = subprocess.run(
+                    ["gcloud", "storage", "objects", "describe", gs_uri,
+                     "--project", project, "--format=value(size)"],
+                    capture_output=True, text=True, timeout=90,
+                )
+            except subprocess.TimeoutExpired:
+                log(f"WARN: describe probe timeout while waiting for {gs_uri} — retrying", indent=2)
+                continue
             if probe.returncode == 0 and probe.stdout.strip():
                 break
             time.sleep(10)
@@ -1022,7 +1169,14 @@ def main():
                          "for fully automated direct-POST. 'stage' uploads downloaded mp4s to GCS and signs URLs. "
                          "'retrieve' pulls output JSON back from GCS (needs notebook patch). 'wait' takes "
                          "a runId in place of urls_file."))
-    p.add_argument("urls_file", type=str, help="Path to urls.txt (URLs, channels, playlists — auto-expanded) — OR a Deepnote runId when phase=wait")
+    p.add_argument("urls_file", type=str, nargs="?", default="",
+                   help="Path to urls.txt (YouTube URLs, channels, playlists — auto-expanded). "
+                        "OR a Deepnote runId when phase=wait. Omit when using --manifest.")
+    p.add_argument("--manifest", type=str, default="",
+                   help="Path to a manifest JSON for source-agnostic ingest "
+                        "(workshop walker output, local-dir walker output, podcast list, etc.). "
+                        "Each item provides mp4_path + full_label; short_id is derived as sha1(label)[:11]. "
+                        "Mutually exclusive with urls_file.  See load_manifest() docstring for shape.")
     p.add_argument("--notebook-id", default=os.environ.get("DEEPNOTE_NOTEBOOK_ID", DEFAULT_NOTEBOOK_ID),
                    help=f"Deepnote notebook ID (default: {DEFAULT_NOTEBOOK_ID})")
     p.add_argument("--format", default=DEFAULT_FORMAT,
@@ -1096,13 +1250,28 @@ def main():
             log(f"Then run:  ./batch_ingest.py summary <urls_file>")
         return
 
-    urls_path = Path(args.urls_file)
-    if not urls_path.exists():
-        sys.exit(f"FATAL: urls file not found: {urls_path}")
-
-    videos = load_urls(urls_path, max_channel_videos=args.max_channel_videos)
-    if not videos:
-        sys.exit(f"FATAL: no URLs in {urls_path}")
+    # Manifest mode (source-agnostic) vs urls.txt mode (YouTube).  Mutually
+    # exclusive; manifest wins if both are provided.
+    if args.manifest:
+        manifest_path = Path(args.manifest).expanduser()
+        if not manifest_path.exists():
+            sys.exit(f"FATAL: manifest not found: {manifest_path}")
+        videos = load_manifest(manifest_path)
+        if not videos:
+            sys.exit(f"FATAL: no items in {manifest_path}")
+        # The download phase is meaningless for manifest mode — MP4s already
+        # exist locally (walker pre-staged them).  Warn but don't fail.
+        if args.phase in ("download", "all"):
+            log(f"NOTE: phase={args.phase} with --manifest — download phase is a no-op for pre-staged MP4s")
+    else:
+        if not args.urls_file:
+            sys.exit("FATAL: provide urls_file (YouTube URLs) OR --manifest (any source). Both omitted.")
+        urls_path = Path(args.urls_file)
+        if not urls_path.exists():
+            sys.exit(f"FATAL: urls file not found: {urls_path}")
+        videos = load_urls(urls_path, max_channel_videos=args.max_channel_videos)
+        if not videos:
+            sys.exit(f"FATAL: no URLs in {urls_path}")
 
     extra_inputs = {}
     for kv in args.input:
@@ -1131,14 +1300,19 @@ def main():
         log(f"--override-prompt loaded {len(prompt_body)} chars (bypasses PROMPT_PROFILE)")
 
     log(f"=== batch_ingest.py — phase={args.phase} ===")
-    log(f"urls file:     {urls_path}")
+    if args.manifest:
+        log(f"manifest:      {args.manifest}")
+    else:
+        log(f"urls file:     {urls_path}")
     log(f"upload dir:    {UPLOAD_DIR}")
     log(f"token file:    {TOKEN_PATH}")
     log(f"notebook id:   {args.notebook_id}")
     log(f"yt-dlp format: {args.format}")
-    log(f"loaded {len(videos)} video URL(s):")
+    log(f"loaded {len(videos)} video item(s):")
     for v in videos:
-        log(f"  - {v.youtube_id}  ({v.url})", indent=1)
+        # Show full_label (human) + short_id (gcs key) + source-type so the
+        # operator can verify what's about to be processed at a glance.
+        log(f"  - {v.short_id}  [{v.source_type}]  {v.full_label}", indent=1)
     log("")
 
     use_gcs = not args.no_gcs
