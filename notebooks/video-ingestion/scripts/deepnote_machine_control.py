@@ -40,7 +40,8 @@ endpoint, they live on the WEB API (`deepnote.com/api/*`) with cookie-auth.
 #
 # Verification: run with --dry-run first, confirm the URL it would hit, then
 # remove --dry-run for the real call.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ============================================================================
+"""
 
 from __future__ import annotations
 
