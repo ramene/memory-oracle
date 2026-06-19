@@ -1058,7 +1058,9 @@ def ingest_video(token: str, notebook_id: str, video: Video, extra_inputs: dict,
 def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
                   drive_path: Path | None = None,
                   backend: str = "deepnote",
-                  replicate_model: str = DEFAULT_REPLICATE_MODEL) -> None:
+                  replicate_model: str = DEFAULT_REPLICATE_MODEL,
+                  restart_between: bool = False,
+                  restart_project_id: str = "") -> None:
     # Replicate backend short-circuits the Deepnote-specific path
     if backend == "replicate":
         log(f"=== PHASE 2: ingest — {len(videos)} videos via REPLICATE API ===")
@@ -1085,6 +1087,31 @@ def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
     t0 = time.time()
     ok = err = 0
     for i, video in enumerate(videos, 1):
+        # Cold-start guarantee: before the 2nd+ video, restart the machine to
+        # defeat the warm-kernel state leak.  Each restart adds ~30-60s + a
+        # ~$0.05-0.10 cold-start cost; in exchange every run starts with the
+        # full ~22 GB VRAM free (vs ~3 GB free after a leaky warm reuse).
+        # See [[project_deepnote_oom_patch_ineffective]] for the empirical data.
+        if restart_between and i > 1:
+            if not restart_project_id:
+                log(f"WARN: --restart-between set but --restart-project-id empty; skipping restart")
+            else:
+                log(f"--- Restarting machine before video {i} (cold-start defeats warm-kernel OOM) ---")
+                try:
+                    # Lazy import — the machine-control module needs F12 endpoints
+                    # filled in before this call works.  Fails clearly if not.
+                    import importlib.util as _ilu
+                    _mc_path = Path(__file__).parent / "deepnote_machine_control.py"
+                    _spec = _ilu.spec_from_file_location("dmc", _mc_path)
+                    _mc = _ilu.module_from_spec(_spec)
+                    _spec.loader.exec_module(_mc)
+                    _mc.restart_machine(restart_project_id, settle_seconds=30)
+                    log(f"  ✓ machine restarted; resuming ingest")
+                except Exception as e:
+                    log(f"  ✗ restart failed: {e}", indent=1)
+                    log(f"  (check deepnote_machine_control.py — F12 endpoints filled in?)", indent=1)
+                    log(f"  proceeding WITHOUT restart — extraction may produce _inference_error", indent=1)
+
         log(f"--- Video {i}/{len(videos)}: {video.youtube_id} ---")
         ingest_video(token, notebook_id, video, extra_inputs, drive_path)
         if video.status == "success":
@@ -1177,6 +1204,13 @@ def main():
                         "(workshop walker output, local-dir walker output, podcast list, etc.). "
                         "Each item provides mp4_path + full_label; short_id is derived as sha1(label)[:11]. "
                         "Mutually exclusive with urls_file.  See load_manifest() docstring for shape.")
+    p.add_argument("--restart-between", action="store_true",
+                   help="Stop+start the Deepnote machine between videos to defeat the warm-kernel "
+                        "OOM leak documented in [[project_deepnote_oom_patch_ineffective]]. Adds "
+                        "~30-60s + ~$0.05-0.10 cold-start cost per video, but yields reliable "
+                        "extractions. Requires deepnote_machine_control.py F12 endpoints to be filled.")
+    p.add_argument("--restart-project-id", default="ae2b2f17-fb74-43bf-a749-b5a5b8a163c8",
+                   help="Project UUID for --restart-between (default: native-video)")
     p.add_argument("--notebook-id", default=os.environ.get("DEEPNOTE_NOTEBOOK_ID", DEFAULT_NOTEBOOK_ID),
                    help=f"Deepnote notebook ID (default: {DEFAULT_NOTEBOOK_ID})")
     p.add_argument("--format", default=DEFAULT_FORMAT,
@@ -1334,7 +1368,9 @@ def main():
                         impersonate_sa=args.gcs_impersonate_sa)
             log("")
         phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
-                     backend=args.backend, replicate_model=args.replicate_model)
+                     backend=args.backend, replicate_model=args.replicate_model,
+                     restart_between=args.restart_between,
+                     restart_project_id=args.restart_project_id)
     elif args.phase == "retrieve":
         phase_retrieve(videos, args.gcs_bucket, args.gcs_project, args.retrieve_max_wait)
     elif args.phase == "summary":
