@@ -128,8 +128,8 @@ def start_machine(project_id: str, *, dry_run: bool = False) -> dict:
 
 def restart_machine(project_id: str, *, settle_seconds: int = 30,
                     dry_run: bool = False) -> dict:
-    """Stop → wait → start.  Use between batch_ingest videos to defeat the
-    warm-kernel state leak ([[project_deepnote_oom_patch_ineffective]])."""
+    """Stop, wait, then start.  Use between batch_ingest videos to defeat
+    the warm-kernel state leak ([[project_deepnote_oom_patch_ineffective]])."""
     stop_resp = stop_machine(project_id, dry_run=dry_run)
     if not dry_run:
         print(f"[restart] settling {settle_seconds}s before re-start…", file=sys.stderr)
