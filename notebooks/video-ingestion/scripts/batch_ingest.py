@@ -1379,7 +1379,9 @@ def main():
         # Replicate backend short-circuits download (the API fetches from URL itself)
         if args.backend == "replicate":
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
-                         backend=args.backend, replicate_model=args.replicate_model)
+                         backend=args.backend, replicate_model=args.replicate_model,
+                         restart_between=args.restart_between,
+                         restart_project_id=args.restart_project_id)
             phase_summary(videos)
             return
         # Deepnote backend: download → stage → ingest → retrieve → summary
@@ -1389,14 +1391,18 @@ def main():
                         args.input_ttl_hours, args.output_ttl_hours,
                         impersonate_sa=args.gcs_impersonate_sa)
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
-                         backend=args.backend, replicate_model=args.replicate_model)
+                         backend=args.backend, replicate_model=args.replicate_model,
+                         restart_between=args.restart_between,
+                         restart_project_id=args.restart_project_id)
             phase_retrieve(videos, args.gcs_bucket, args.gcs_project, args.retrieve_max_wait)
         else:
             # Legacy path — operator drags files manually
             if drive_path is None:
                 input("\nPress Enter once you've dragged mp4 files into Deepnote work folder...")
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
-                         backend=args.backend, replicate_model=args.replicate_model)
+                         backend=args.backend, replicate_model=args.replicate_model,
+                         restart_between=args.restart_between,
+                         restart_project_id=args.restart_project_id)
             if drive_path is None:
                 input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
         phase_summary(videos)
