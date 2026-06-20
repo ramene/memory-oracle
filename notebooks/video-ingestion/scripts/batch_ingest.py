@@ -1060,7 +1060,9 @@ def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
                   backend: str = "deepnote",
                   replicate_model: str = DEFAULT_REPLICATE_MODEL,
                   restart_between: bool = False,
-                  restart_project_id: str = "") -> None:
+                  restart_project_id: str = "",
+                  stop_after: bool = True,
+                  stop_project_id: str = "") -> None:
     # Replicate backend short-circuits the Deepnote-specific path
     if backend == "replicate":
         log(f"=== PHASE 2: ingest — {len(videos)} videos via REPLICATE API ===")
@@ -1122,6 +1124,33 @@ def phase_ingest(videos: list[Video], notebook_id: str, extra_inputs: dict,
     log("")
     log(f"=== Ingest phase complete: {ok} success, {err} error, {len(videos) - ok - err} other ({elapsed:.0f}s total) ===")
     log("")
+
+    # CRITICAL: API-triggered runs do NOT inherit Deepnote's UI auto-shutdown
+    # (operator-verified 2026-06-19).  Without an explicit stop after the last
+    # run completes, the machine continues to bill at $0.104/min until manually
+    # stopped.  Always issue a stop here unless the operator opts out for
+    # follow-up work that needs a warm machine.
+    if stop_after and backend == "deepnote":
+        proj_id = stop_project_id or restart_project_id
+        if not proj_id:
+            log(f"NOTE: --stop-after requested but no project-id available; SKIPPING stop (machine may continue to bill)")
+        else:
+            log(f"--- Stopping machine to halt billing (project_id={proj_id}) ---")
+            try:
+                import importlib.util as _ilu
+                _mc_path = Path(__file__).parent / "deepnote_machine_control.py"
+                _spec = _ilu.spec_from_file_location("dmc", _mc_path)
+                _mc = _ilu.module_from_spec(_spec)
+                _spec.loader.exec_module(_mc)
+                stop_resp = _mc.stop_machine(proj_id)
+                log(f"  ✓ machine stop requested: {stop_resp.get('__typename', stop_resp)}")
+            except Exception as e:
+                # Idempotency: machine may already be down (e.g. auto-shutdown
+                # finally fired between last run and our stop call).  Log + move on;
+                # don't fail the overall run on a stop-side error.
+                log(f"  ⚠ stop call failed (machine may already be down): {e}", indent=1)
+        log("")
+
     if drive_path is None:
         log(f"NEXT MANUAL STEP:")
         log(f"  Drag *-output.json files from Deepnote 'work' folder back to {UPLOAD_DIR}/")
@@ -1204,6 +1233,13 @@ def main():
                         "(workshop walker output, local-dir walker output, podcast list, etc.). "
                         "Each item provides mp4_path + full_label; short_id is derived as sha1(label)[:11]. "
                         "Mutually exclusive with urls_file.  See load_manifest() docstring for shape.")
+    p.add_argument("--no-stop-after", dest="stop_after", action="store_false", default=True,
+                   help="By default, batch_ingest issues an explicit Stop after the ingest phase "
+                        "completes — API-triggered machines do NOT inherit the UI auto-shutdown so "
+                        "they bill continuously until stopped (verified 2026-06-19, $0.104/min L4). "
+                        "Use --no-stop-after if you want to keep the machine warm for follow-up.")
+    p.add_argument("--stop-project-id", default="",
+                   help="Project UUID for the stop-after call (defaults to --restart-project-id).")
     p.add_argument("--restart-between", action="store_true",
                    help="Stop+start the Deepnote machine between videos to defeat the warm-kernel "
                         "OOM leak documented in [[project_deepnote_oom_patch_ineffective]]. Adds "
@@ -1381,7 +1417,9 @@ def main():
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
                          backend=args.backend, replicate_model=args.replicate_model,
                          restart_between=args.restart_between,
-                         restart_project_id=args.restart_project_id)
+                         restart_project_id=args.restart_project_id,
+                         stop_after=args.stop_after,
+                         stop_project_id=args.stop_project_id)
             phase_summary(videos)
             return
         # Deepnote backend: download → stage → ingest → retrieve → summary
@@ -1393,7 +1431,9 @@ def main():
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
                          backend=args.backend, replicate_model=args.replicate_model,
                          restart_between=args.restart_between,
-                         restart_project_id=args.restart_project_id)
+                         restart_project_id=args.restart_project_id,
+                         stop_after=args.stop_after,
+                         stop_project_id=args.stop_project_id)
             phase_retrieve(videos, args.gcs_bucket, args.gcs_project, args.retrieve_max_wait)
         else:
             # Legacy path — operator drags files manually
@@ -1402,7 +1442,9 @@ def main():
             phase_ingest(videos, args.notebook_id, extra_inputs, drive_path,
                          backend=args.backend, replicate_model=args.replicate_model,
                          restart_between=args.restart_between,
-                         restart_project_id=args.restart_project_id)
+                         restart_project_id=args.restart_project_id,
+                         stop_after=args.stop_after,
+                         stop_project_id=args.stop_project_id)
             if drive_path is None:
                 input("\nPress Enter once you've dragged output.json files back to ~/Downloads/upload/...")
         phase_summary(videos)
