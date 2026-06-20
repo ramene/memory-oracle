@@ -88,54 +88,146 @@ def web_call(method: str, path: str, body: dict | None = None,
         return (e.code, e.read().decode("utf-8", errors="replace"))
 
 
-# ━━━ FILL IN AFTER F12 CAPTURE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Replace `PATH`, `METHOD`, and `BODY` with the values from /tmp/deepnote-{stop,start}-machine.curl.
+# ━━━ GraphQL operations (captured 2026-06-19 from DevTools, operator-confirmed) ━━━
+
+DEEPNOTE_GRAPHQL_URL = f"{DEEPNOTE_WEB_BASE}/graphql"
+
+# Mutation: StartProjectHardware → startProjectExecutor union(Success{ok} | Error{error})
+START_HARDWARE_QUERY = """mutation StartProjectHardware($projectId: String!) {
+  startProjectExecutor(projectId: $projectId) {
+    ... on ProjectExecutorStartSuccess { ok __typename }
+    ... on ProjectExecutorStartError { error __typename }
+    __typename
+  }
+}"""
+
+# Mutation: StopProjectHardware → stopProjectExecutor union(Success{ok} | Error{error})
+STOP_HARDWARE_QUERY = """mutation StopProjectHardware($projectId: String!) {
+  stopProjectExecutor(projectId: $projectId) {
+    ... on ProjectExecutorStopSuccess { ok __typename }
+    ... on ProjectExecutorStopError { error __typename }
+    __typename
+  }
+}"""
+
+# Query: GetProjectHardwareState → hardware_state + hardware_message (read-only)
+GET_HARDWARE_STATE_QUERY = """query GetProjectHardwareState($projectId: String!) {
+  projectById(id: $projectId) {
+    ... on Project {
+      hardware_state {
+        hardware_status
+        executor_status
+        initialized
+        tunnel_domain
+        __typename
+      }
+      hardware_message {
+        message severity documentationUrl duration actionable __typename
+      }
+      __typename
+    }
+    __typename
+  }
+}"""
+
+
+def _graphql(operation_name: str, query: str, variables: dict,
+             cookie_header: str | None = None, timeout: int = 30) -> dict:
+    """POST a GraphQL operation to deepnote.com/graphql with cookie auth.
+
+    The DevTools-captured curls always pass operation_name as a query param
+    (cosmetic — actual routing is by `operationName` in the body), and the
+    `query` field must be the FULL query string (Apollo persisted-queries
+    are not registered for our session)."""
+    url = f"{DEEPNOTE_GRAPHQL_URL}?operation_name={operation_name}"
+    body_obj = {"operationName": operation_name, "variables": variables, "query": query}
+    code, text = web_call("POST", f"/graphql?operation_name={operation_name}",
+                          body_obj, cookie_header=cookie_header, timeout=timeout)
+    if code >= 400:
+        raise RuntimeError(f"GraphQL {operation_name} HTTP {code}: {text[:400]}")
+    try:
+        resp = json.loads(text)
+    except Exception:
+        return {"raw": text, "status": code}
+    if "errors" in resp and resp["errors"]:
+        # Surface GraphQL errors without raising — caller decides
+        return {"errors": resp["errors"], "data": resp.get("data")}
+    return resp.get("data", {})
+
+
+def get_hardware_state(project_id: str) -> dict:
+    """Return current hardware state including tunnel_domain (Incoming Connections URL)
+    when initialized=true. Read-only — safe to call at any time."""
+    data = _graphql("GetProjectHardwareState", GET_HARDWARE_STATE_QUERY,
+                    {"projectId": project_id})
+    if "errors" in data:
+        return data
+    proj = data.get("projectById") or {}
+    return {
+        "hardware_state": proj.get("hardware_state"),
+        "hardware_message": proj.get("hardware_message"),
+    }
+
 
 def stop_machine(project_id: str, *, dry_run: bool = False) -> dict:
     """Stop the running machine for project_id.  Returns the parsed response."""
-    # TODO replace after F12: e.g. PATH=f"/api/project/{project_id}/machine/stop"
-    PATH = f"/api/project/{project_id}/MACHINE_STOP_TODO"
-    METHOD = "POST"
-    BODY: dict | None = None  # most likely {} or {"action":"stop"}; check F12
-
-    print(f"[stop] {METHOD} {DEEPNOTE_WEB_BASE}{PATH}  body={BODY}", file=sys.stderr)
+    print(f"[stop] POST /graphql?operation_name=StopProjectHardware projectId={project_id}", file=sys.stderr)
     if dry_run:
-        return {"dry_run": True, "method": METHOD, "path": PATH, "body": BODY}
-    code, text = web_call(METHOD, PATH, BODY)
-    print(f"[stop] HTTP {code}", file=sys.stderr)
-    if code >= 400:
-        raise RuntimeError(f"stop failed HTTP {code}: {text[:300]}")
-    try: return json.loads(text)
-    except: return {"raw": text, "status": code}
+        return {"dry_run": True, "operation": "StopProjectHardware", "projectId": project_id}
+    data = _graphql("StopProjectHardware", STOP_HARDWARE_QUERY, {"projectId": project_id})
+    if "errors" in data:
+        raise RuntimeError(f"stop failed: {data['errors']}")
+    result = data.get("stopProjectExecutor") or {}
+    print(f"[stop] {result.get('__typename')}: ok={result.get('ok')} error={result.get('error')}", file=sys.stderr)
+    return result
 
 
 def start_machine(project_id: str, *, dry_run: bool = False) -> dict:
     """Start a machine for project_id.  Returns the parsed response."""
-    # TODO replace after F12: e.g. PATH=f"/api/project/{project_id}/machine/start"
-    PATH = f"/api/project/{project_id}/MACHINE_START_TODO"
-    METHOD = "POST"
-    BODY: dict | None = None  # may need {"hardware":"GPU_L4"} or similar — check F12
-
-    print(f"[start] {METHOD} {DEEPNOTE_WEB_BASE}{PATH}  body={BODY}", file=sys.stderr)
+    print(f"[start] POST /graphql?operation_name=StartProjectHardware projectId={project_id}", file=sys.stderr)
     if dry_run:
-        return {"dry_run": True, "method": METHOD, "path": PATH, "body": BODY}
-    code, text = web_call(METHOD, PATH, BODY)
-    print(f"[start] HTTP {code}", file=sys.stderr)
-    if code >= 400:
-        raise RuntimeError(f"start failed HTTP {code}: {text[:300]}")
-    try: return json.loads(text)
-    except: return {"raw": text, "status": code}
+        return {"dry_run": True, "operation": "StartProjectHardware", "projectId": project_id}
+    data = _graphql("StartProjectHardware", START_HARDWARE_QUERY, {"projectId": project_id})
+    if "errors" in data:
+        raise RuntimeError(f"start failed: {data['errors']}")
+    result = data.get("startProjectExecutor") or {}
+    print(f"[start] {result.get('__typename')}: ok={result.get('ok')} error={result.get('error')}", file=sys.stderr)
+    return result
 
 
 def restart_machine(project_id: str, *, settle_seconds: int = 30,
-                    dry_run: bool = False) -> dict:
-    """Stop, wait, then start. Use between batch_ingest videos to defeat the warm-kernel state leak (see project_deepnote_oom_patch_ineffective memory)."""
+                    poll_seconds: int = 120, dry_run: bool = False) -> dict:
+    """Stop, wait, then start. Use between batch_ingest videos to defeat the warm-kernel state leak (see project_deepnote_oom_patch_ineffective memory).
+
+    After issuing Start, poll hardware_state up to poll_seconds until
+    executor_status reaches a steady running state (or fail clearly)."""
     stop_resp = stop_machine(project_id, dry_run=dry_run)
     if not dry_run:
-        print(f"[restart] settling {settle_seconds}s before re-start…", file=sys.stderr)
+        print(f"[restart] settling {settle_seconds}s before re-start...", file=sys.stderr)
         time.sleep(settle_seconds)
     start_resp = start_machine(project_id, dry_run=dry_run)
-    return {"stop": stop_resp, "start": start_resp}
+    if dry_run:
+        return {"stop": stop_resp, "start": start_resp, "final_state": None}
+
+    # Poll for machine readiness so the caller can immediately fire work
+    t0 = time.time()
+    final_state = None
+    while time.time() - t0 < poll_seconds:
+        st = get_hardware_state(project_id)
+        hw = st.get("hardware_state") or {}
+        status = hw.get("hardware_status")
+        exec_status = hw.get("executor_status")
+        print(f"[restart] poll @ {int(time.time()-t0)}s: hardware_status={status} executor_status={exec_status}",
+              file=sys.stderr)
+        if exec_status in ("running", "ready", "idle"):
+            final_state = hw
+            break
+        if exec_status in ("error", "failed"):
+            final_state = hw
+            break
+        time.sleep(10)
+    return {"stop": stop_resp, "start": start_resp, "final_state": final_state,
+            "wait_seconds": int(time.time() - t0)}
 
 
 # ─── cli ───────────────────────────────────────────────────────────────────
@@ -143,7 +235,7 @@ def restart_machine(project_id: str, *, settle_seconds: int = 30,
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("action", choices=["stop", "start", "restart"])
+    p.add_argument("action", choices=["stop", "start", "restart", "state"])
     p.add_argument("--project-id", default="ae2b2f17-fb74-43bf-a749-b5a5b8a163c8",
                    help="Deepnote project UUID (default: native-video)")
     p.add_argument("--settle-seconds", type=int, default=30,
@@ -156,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
         out = stop_machine(args.project_id, dry_run=args.dry_run)
     elif args.action == "start":
         out = start_machine(args.project_id, dry_run=args.dry_run)
+    elif args.action == "state":
+        out = get_hardware_state(args.project_id)
     else:
         out = restart_machine(args.project_id,
                               settle_seconds=args.settle_seconds,
