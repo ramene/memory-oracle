@@ -167,14 +167,23 @@ esac
 # BRAIN_MACHINES list that names the OTHER two peers. Idempotent: read current
 # crontab, strip our marked lines, re-add. Detect host via `hostname -s`.
 HOST_SHORT="$(hostname -s 2>/dev/null || hostname)"
+# Mesh identity is keyed on the RESERVED LAN IP, not hostname — hostnames don't always match
+# the mesh short-name (e.g. sequoia's hostname is 'Ramenes-MacBook-Pro-7'). Fall back to hostname.
+LAN_IP="$(ifconfig 2>/dev/null | grep 'inet 192.168.100.' | awk '{print $2}' | head -1)"
+case "$LAN_IP" in
+  192.168.100.2)                  HOST_MESH=noodles ;;
+  192.168.100.14)                 HOST_MESH=sequoia ;;
+  192.168.100.10|192.168.100.12)  HOST_MESH=tunafish ;;
+  *)                              HOST_MESH="$HOST_SHORT" ;;
+esac
 mkdir -p "$HOME/.claude-tmp"
-echo "[memory-oracle] installing substrate crons for host '$HOST_SHORT'..."
+echo "[memory-oracle] installing substrate crons for mesh node '$HOST_MESH' (host $HOST_SHORT, ip ${LAN_IP:-?})..."
 
 VAULT_MARK="# memory-oracle:vault-autosync"
 BRAIN_MARK="# memory-oracle:brain-sync"
 VAULT_LINE="*/3 * * * * \$HOME/.bin/vault-autosync.sh >> \$HOME/.claude-tmp/vault-autosync.log 2>&1 $VAULT_MARK"
 
-case "$HOST_SHORT" in
+case "$HOST_MESH" in
   noodles)  BRAIN_SCHED="*/15 * * * *";       BRAIN_MACHINES="local,sequoia,tunafish" ;;
   sequoia)  BRAIN_SCHED="5,20,35,50 * * * *"; BRAIN_MACHINES="local,noodles,tunafish" ;;
   tunafish) BRAIN_SCHED="10,25,40,55 * * * *";BRAIN_MACHINES="local,noodles,sequoia" ;;
@@ -194,7 +203,7 @@ if [ -n "$BRAIN_SCHED" ]; then
 $BRAIN_LINE"
   echo "  + brain-sync: '$BRAIN_SCHED' BRAIN_MACHINES=$BRAIN_MACHINES"
 else
-  echo "  (notice: host '$HOST_SHORT' is not a known mesh node — installing vault-autosync only, skipping brain-sync)"
+  echo "  (notice: mesh node '$HOST_MESH' (ip ${LAN_IP:-?}) not recognized — installing vault-autosync only, skipping brain-sync)"
 fi
 # strip leading blank line(s) and load
 printf '%s\n' "$NEW_CRON" | sed '/./,$!d' | crontab -
@@ -255,7 +264,7 @@ mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
 touch "$SSH_CONFIG"; chmod 600 "$SSH_CONFIG"
 add_mesh_host() {
   local name="$1" ip="$2"
-  if [ "$name" = "$HOST_SHORT" ]; then
+  if [ "$name" = "$HOST_MESH" ]; then
     echo "  (skipping ssh alias for current host '$name')"
     return
   fi
