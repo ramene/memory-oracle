@@ -169,7 +169,9 @@ esac
 HOST_SHORT="$(hostname -s 2>/dev/null || hostname)"
 # Mesh identity is keyed on the RESERVED LAN IP, not hostname — hostnames don't always match
 # the mesh short-name (e.g. sequoia's hostname is 'Ramenes-MacBook-Pro-7'). Fall back to hostname.
-LAN_IP="$(ifconfig 2>/dev/null | grep 'inet 192.168.100.' | awk '{print $2}' | head -1)"
+# ifconfig lives in /sbin (often absent from a minimal cron/ssh PATH) — call it absolutely,
+# fall back to PATH ifconfig, then `ip` (Linux). Without this LAN_IP is empty -> misdetect.
+LAN_IP="$( { /sbin/ifconfig 2>/dev/null || ifconfig 2>/dev/null || ip -4 addr 2>/dev/null; } | grep -oE '192\.168\.100\.[0-9]+' | head -1)"
 case "$LAN_IP" in
   192.168.100.2)                  HOST_MESH=noodles ;;
   192.168.100.14)                 HOST_MESH=sequoia ;;
