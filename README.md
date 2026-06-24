@@ -122,6 +122,40 @@ This:
 
 Idempotent. Re-running upgrades in place. Configurable: set `MEMORY_INDEX_DB` and `CLAUDE_PROJECTS_ROOT` in your shell rc to override defaults.
 
+## Substrate propagation
+
+`./install.sh` is the **single propagation path** for the whole EBR substrate across machines (noodles / sequoia / tunafish + any future box). Deploying to a machine is just:
+
+```bash
+git pull && ./install.sh
+```
+
+No hand-copying tools to each host. Beyond the oracle CLIs above, the installer also (all idempotent, safe to re-run):
+
+- **Substrate fleet tools** → `~/.bin/` + `chmod +x`: `brain-sync.sh`, `vault-autosync.sh`, `git-remote-verum` (sovereign git remote-helper), `claude-hook-substrate-guard.mjs`, and the M3 tools `mae-substrate-export.mjs` / `mae-substrate-import.mjs` / `mae-substrate-merge.mjs` / `mae-verum-pubkeys.mjs`.
+- **Claude Code hooks** auto-registered in `~/.claude/settings.json` via an idempotent `python3` merge (creates the file/keys if missing, de-dupes by command before appending):
+  - `SessionStart` → `$HOME/.bin/claude-hook-session-start.sh` (the amendment-aware banner)
+  - `PreToolUse` matcher `Bash` → `node $HOME/.bin/claude-hook-substrate-guard.mjs` (routes substrate recall through the oracle)
+- **Cron jobs** (host-detected via `hostname -s`, written to `~/.claude-tmp/*.log`):
+  - `vault-autosync` every 3 min on **all** hosts.
+  - `brain-sync` per host, staggered so the mesh converges without collisions, each pointed at the other two peers via `BRAIN_MACHINES`:
+
+    | Host | Schedule | `BRAIN_MACHINES` |
+    |---|---|---|
+    | noodles | `*/15 * * * *` | `local,sequoia,tunafish` |
+    | sequoia | `5,20,35,50 * * * *` | `local,noodles,tunafish` |
+    | tunafish | `10,25,40,55 * * * *` | `local,noodles,sequoia` |
+    | (unknown host) | — | vault-autosync only; brain-sync skipped with a notice |
+- **verum binary** at `~/.bin/verum`: if not already `verum 0.11.0`, downloads the arch-matched asset (`uname -m`/`uname -s`) from the `v0.11.0` GitHub release via `gh release download … -R ramene/verum`, untars, installs. If `gh` or the asset is unavailable, it prints a manual-fallback note and continues (install does not fail).
+- **Mesh ssh aliases** in `~/.ssh/config` (dedup-safe, skips the current host): `noodles` (192.168.100.2), `sequoia` (.14), `tunafish` (.12) — each `User ramene`, `IdentityFile ~/.ssh/id_ed25519_ramene_auth`, `StrictHostKeyChecking accept-new`.
+
+### Deploying to a new machine
+
+1. Generate the verum identity once on the box: `node ~/.bin/mae-verum-pubkeys.mjs --gen-ed25519 --gen-x25519` (private keys stay local, 0600).
+2. `git clone https://github.com/ramene/memory-oracle && cd memory-oracle && ./install.sh`.
+3. Add the new host to the per-host `case` blocks in `install.sh` (cron schedule + `BRAIN_MACHINES`) and to the `add_mesh_host` calls, so the mesh knows about it.
+4. Distribute any shared verum namespace key out-of-band (the brain is sovereign — no third party holds it).
+
 ## Usage
 
 ```bash

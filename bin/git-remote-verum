@@ -1,0 +1,425 @@
+#!/usr/bin/env node
+// git-remote-verum — Tier 2 vault-sync: a sovereign git remote-helper (the Keybase-Git pattern).
+//
+// Stores git history as M3-encrypted, content-addressed blocks. NO third party ever
+// holds the data, not even ciphertext — the block store and (later) transport are the
+// institution's own substrate. This MVP proves the helper end-to-end with a local
+// block directory; the substrate/M3 network transport plugs in at the `Store` seam.
+//
+// Approach (git-remote-helpers(7), import/export capabilities):
+//   export : git pipes us a `git fast-export` stream on stdin. We capture the whole
+//            stream, zlib-compress it, encrypt it (ChaCha20-Poly1305 under a per-namespace
+//            SHARED key — git-crypt model), store it as a content-addressed block keyed by
+//            sha256(ciphertext), and update the encrypted refs document.
+//   import : we fetch the requested refs' blocks, decrypt + decompress, concatenate the
+//            fast-export streams, and emit one combined fast-import stream back to git.
+//
+// Crypto: Node stdlib only. Each block is encrypted to a 32-byte SHARED namespace key at
+// ~/.verum/verum-git-<namespace>.key — any machine holding that key (distributed out-of-band
+// across noodles/sequoia/tunafish) can read & write. The shared key IS the trust boundary.
+// Blocks + the mutable refs doc replicate over SSH to VERUM_PEERS (the substrate transport).
+//
+// Invocation (by git): git-remote-verum <remote-name> verum://<namespace>
+// Protocol is line-oriented on stdin/stdout; debug/log goes to stderr only.
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import zlib from "node:zlib";
+import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
+
+const HOME = os.homedir();
+const DEBUG = !!process.env.VERUM_DEBUG;
+
+// ── args / url ────────────────────────────────────────────────────────────────
+// argv: [node, git-remote-verum, <remote-name>, <url>]
+const remoteName = process.argv[2] || "verum";
+const url = process.argv[3] || "";
+const namespace = parseNamespace(url);
+if (!namespace) fail(`bad verum url: ${JSON.stringify(url)} (expected verum://<namespace>)`);
+
+// git may close our stdout early (e.g. fast-export aborts); don't crash on EPIPE.
+process.stdout.on("error", (e) => { if (e && e.code === "EPIPE") process.exit(0); throw e; });
+
+// ── identity / keys ─────────────────────────────────────────────────────────────
+const VERUM_DIR = process.env.VERUM_DIR || path.join(HOME, ".verum");
+// Legacy per-machine keys (left loaded for compatibility; no longer used by the envelope,
+// which is now a shared-namespace-key scheme — see encryptBlock/decryptBlock below).
+const x25519Priv = crypto.createPrivateKey(fs.readFileSync(path.join(VERUM_DIR, "operator-x25519.key")));
+const x25519Pub = crypto.createPublicKey(x25519Priv);
+const ownX25519PubB64 = rawPub(x25519Pub);          // recipient for the MVP single-operator case
+const edPriv = crypto.createPrivateKey(fs.readFileSync(path.join(VERUM_DIR, "operator-ed25519.key")));
+const edPub = crypto.createPublicKey(edPriv);
+const ownEdPubB64 = rawPub(edPub);
+
+// Shared namespace key — the trust boundary (git-crypt model): any machine holding this
+// 32-byte key can decrypt/verify every block in the namespace. Generated on first use and
+// MUST be distributed out-of-band to the other machines (noodles/sequoia/tunafish).
+const SHARED_KEY = loadSharedKey(namespace);
+function sanitizeNs(ns) { return ns.replace(/\//g, "_"); }
+function loadSharedKey(ns) {
+  const p = path.join(VERUM_DIR, `verum-git-${sanitizeNs(ns)}.key`);
+  if (fs.existsSync(p)) {
+    const k = fs.readFileSync(p);
+    if (k.length !== 32) fail(`shared key ${p} is ${k.length} bytes, expected 32`);
+    return k;
+  }
+  const k = crypto.randomBytes(32);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, k, { mode: 0o600 });
+  process.stderr.write(`git-remote-verum: generated NEW shared namespace key at ${p} — distribute it to peer machines to sync.\n`);
+  return k;
+}
+
+// ── block store (the substrate seam) ──────────────────────────────────────────
+// MVP backend: a local directory. Swap this `Store` object for an M3-network transport
+// (push/pull blocks as M3 envelopes over the substrate) and nothing else changes.
+const STORE_ROOT = process.env.VERUM_STORE || path.join(HOME, ".local", "share", "verum-git");
+const Store = makeSubstrateStore(path.join(STORE_ROOT, namespace));
+
+// ── protocol loop ───────────────────────────────────────────────────────────────
+main().catch((e) => fail(e && e.stack ? e.stack : String(e)));
+
+async function main() {
+  const rl = lineReader(process.stdin);
+  for (;;) {
+    const line = await rl.next();
+    if (line === null) break;            // EOF → done
+    dbg(`<< ${JSON.stringify(line)}`);
+    if (line === "capabilities") {
+      // We use the fast-export / fast-import bridge. `refspec` maps remote refs into a
+      // private namespace so git tracks them; `*import`/`*export` (the leading * means
+      // git keeps the connection open for batches). `signed-tags`/`force` are passthroughs.
+      out("import");
+      out("export");
+      out("refspec refs/heads/*:refs/verum/" + remoteName + "/heads/*");
+      out("refspec refs/tags/*:refs/verum/" + remoteName + "/tags/*");
+      out("signed-tags");
+      out("");
+    } else if (line === "list" || line === "list for-push") {
+      const refs = readRefs();
+      for (const [ref, sha] of Object.entries(refs.refs)) out(`${sha} ${ref}`);
+      // advertise HEAD symref so `git clone` checks out the right branch
+      if (refs.head) out(`@${refs.head} HEAD`);
+      out("");
+    } else if (line.startsWith("import ")) {
+      // git may send several `import <ref>` lines, then a blank line. Batch them.
+      const refsToImport = [line.slice("import ".length)];
+      for (;;) {
+        const n = await rl.next();
+        if (n === null || n === "") break;
+        if (n.startsWith("import ")) refsToImport.push(n.slice("import ".length));
+        else { dbg(`unexpected during import batch: ${JSON.stringify(n)}`); break; }
+      }
+      doImport(refsToImport);
+    } else if (line === "export") {
+      await doExport(rl);
+    } else if (line === "") {
+      // stray blank line between commands — ignore
+      continue;
+    } else {
+      dbg(`unknown command: ${JSON.stringify(line)} — ignoring`);
+    }
+  }
+}
+
+// ── import: blocks → fast-import stream → git ────────────────────────────────────
+// git pipes our stdout into `git fast-import`. The stored block IS the stream git's own
+// transport produced on export — already framed with `feature done` ... `done` and already
+// using the tracking-ref namespace from our refspec — so we emit it verbatim.
+function doImport(refs) {
+  const meta = readRefs();
+  // De-dup blocks: each stored block is a FULL export (whole history at push time), so the
+  // newest block per requested ref reproduces everything reachable. Replaying two full
+  // exports would reuse mark numbers (:1, :2 ...) and corrupt the import, so for the MVP we
+  // emit a single block. (Incremental/multi-branch divergent import is a later step.)
+  const wanted = refs.filter((r) => meta.refBlocks && meta.refBlocks[r]);
+  const blockIds = [...new Set(wanted.map((r) => meta.refBlocks[r]))];
+  if (blockIds.length > 1)
+    dbg(`WARNING: ${blockIds.length} distinct blocks requested; emitting newest only (full-snapshot MVP)`);
+
+  if (blockIds.length) {
+    let plain = decompress(decryptBlock(Store.get(blockIds[0]))).toString("latin1");
+    // fast-import writes refs LITERALLY as named in the stream, but git's transport then
+    // looks for the *tracking* refs from our refspec (refs/heads/* -> refs/verum/<remote>/
+    // heads/*). The stored stream may carry refs as plain refs/heads/* OR as the tracking
+    // namespace of whatever remote name pushed it — normalize BOTH to THIS remote's
+    // tracking namespace so the refspec resolves.
+    plain = plain
+      .replace(/^(commit|reset|tag) refs\/verum\/[^/]+\/(heads|tags)\/(.+)$/gm,
+        (_, cmd, kind, name) => `${cmd} refs/verum/${remoteName}/${kind}/${name}`)
+      .replace(/^(commit|reset|tag) refs\/(heads|tags)\/(.+)$/gm,
+        (_, cmd, kind, name) => `${cmd} refs/verum/${remoteName}/${kind}/${name}`);
+    process.stdout.write(Buffer.from(plain, "latin1")); // includes its own feature/done framing
+  } else {
+    // nothing to import: still satisfy the protocol with an empty done-framed stream
+    process.stdout.write("feature done\ndone\n");
+  }
+  dbg(`import emitted ${blockIds.length ? 1 : 0} block(s) for ${refs.length} ref(s)`);
+}
+
+// ── export: git fast-export stream → block + refs update ─────────────────────────
+// IMPORTANT: git's transport layer invokes `git fast-export --use-done-feature
+// --refspec refs/heads/*:refs/verum/<remote>/heads/* ...` for us, so the stream we receive
+// ALREADY has its refs remapped into our tracking namespace and is framed with a leading
+// `feature done` and trailing `done`. We store it verbatim (it replays cleanly) and only
+// need to learn ref->sha for the `list` advertisement.
+async function doExport(rl) {
+  const stream = (await rl.readUntilDoneRaw()).toString("latin1"); // includes trailing `done\n`
+
+  // Authoritative ref->sha: replay the EXACT stream into a throwaway bare repo and read
+  // what fast-import actually produces. Guarantees the shas we advertise in `list` match
+  // what `import` reconstructs — robust even when the source has signed commits (fast-export
+  // strips signatures pre-git-2.45, which changes the resulting sha).
+  const refsInStream = shasFromStream(stream);
+
+  const block = encryptBlock(compress(Buffer.from(stream, "latin1")));
+  const blockId = Store.put(block);          // content-addressed by sha256(ciphertext)
+
+  const meta = readRefs();
+  meta.refs = meta.refs || {};
+  meta.refBlocks = meta.refBlocks || {};
+  // refsInStream keys are the tracking refs (refs/verum/<remote>/heads/*). Map back to the
+  // public ref name (refs/heads/*) that git asks about in `list` / push refspecs.
+  for (const [trackingRef, sha] of Object.entries(refsInStream)) {
+    const publicRef = toPublicRef(trackingRef);
+    meta.refs[publicRef] = sha;
+    meta.refBlocks[publicRef] = blockId;
+    out(`ok ${publicRef}`);                  // report success per ref to git
+  }
+  meta.head = pickHead(Object.keys(meta.refs));
+  writeRefs(meta);
+  out("");                                   // blank line terminates the export report
+  dbg(`export stored block ${blockId.slice(0, 12)} refs ${Object.keys(refsInStream).join(",")}`);
+}
+
+// Replay a fast-import stream into a temp bare repo; return { ref: sha } for created refs.
+function shasFromStream(stream) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "verum-fi-"));
+  // git invokes the helper with GIT_DIR/GIT_WORK_TREE/etc pointing at the user's repo;
+  // strip them so our throwaway repo isn't hijacked.
+  const env = { ...process.env };
+  for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES"]) delete env[k];
+  try {
+    execFileSync("git", ["init", "-q", "--bare", tmp], { env });
+    execFileSync("git", ["-C", tmp, "fast-import", "--quiet", "--force"],
+      { input: Buffer.from(stream, "latin1"), stdio: ["pipe", "ignore", "inherit"], env });
+    const out = execFileSync("git", ["-C", tmp, "for-each-ref", "--format=%(objectname) %(refname)"],
+      { encoding: "utf8", env });
+    const refs = {};
+    for (const ln of out.split("\n")) {
+      const m = /^([0-9a-f]{40}) (refs\/.+)$/.exec(ln.trim());
+      if (m) refs[m[2]] = m[1];
+    }
+    return refs;
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// tracking ref (refs/verum/<remote>/heads/foo | .../tags/foo) -> public ref (refs/heads/foo)
+function toPublicRef(ref) {
+  let m;
+  if ((m = new RegExp(`^refs/verum/${escapeRe(remoteName)}/heads/(.+)$`).exec(ref))) return "refs/heads/" + m[1];
+  if ((m = new RegExp(`^refs/verum/${escapeRe(remoteName)}/tags/(.+)$`).exec(ref))) return "refs/tags/" + m[1];
+  return ref; // already public (e.g. a remote that didn't remap)
+}
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+// ── refs document (the single mutable, encrypted object) ─────────────────────────
+function refsBlobPath() { return path.join(STORE_ROOT, namespace, "refs.enc"); }
+// Decode a refs.enc ciphertext buffer → normalized doc (with ts), or null on failure.
+function decodeRefs(buf) {
+  try {
+    const doc = JSON.parse(decryptBlock(buf).toString("utf8"));
+    return { refs: doc.refs || {}, refBlocks: doc.refBlocks || {}, head: doc.head || null, ts: doc.ts || 0 };
+  } catch (e) { dbg(`refs decrypt failed: ${e.message}`); return null; }
+}
+function readRefs() {
+  // Gather candidate docs from {local, each peer}; last-writer-wins by ts. (CAS is Tier-3.)
+  const candidates = [];
+  const p = refsBlobPath();
+  if (fs.existsSync(p)) { const d = decodeRefs(fs.readFileSync(p)); if (d) candidates.push(d); }
+  for (const peer of VERUM_PEERS) {
+    try {
+      const buf = execFileSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", peer, `cat ${shellQuote(p)}`],
+        { stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 30 });
+      if (buf && buf.length) { const d = decodeRefs(buf); if (d) candidates.push(d); }
+    } catch (e) { dbg(`peer ${peer} readRefs failed: ${e.message}`); }
+  }
+  if (!candidates.length) return { refs: {}, refBlocks: {}, head: null };
+  const winner = candidates.reduce((a, b) => (b.ts > a.ts ? b : a));
+  return { refs: winner.refs, refBlocks: winner.refBlocks, head: winner.head };
+}
+function writeRefs(meta) {
+  meta.ts = Date.now();                        // last-writer-wins clock
+  const doc = JSON.stringify({ refs: meta.refs, refBlocks: meta.refBlocks, head: meta.head, ts: meta.ts });
+  const enc = encryptBlock(Buffer.from(doc, "utf8"));
+  const p = refsBlobPath();
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, enc);                    // CAS/atomicity is a later concern (single-operator MVP)
+  for (const peer of VERUM_PEERS) {            // replicate the encrypted refs doc to peers
+    try {
+      execFileSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", peer,
+        `mkdir -p ${shellQuote(path.dirname(p))} && cat > ${shellQuote(p)}`],
+        { input: enc, stdio: ["pipe", "ignore", "ignore"] });
+    } catch (e) { dbg(`peer ${peer} writeRefs failed: ${e.message}`); }
+  }
+}
+
+// ── shared-key envelope (git-crypt model: the namespace key IS the trust boundary) ──
+// Block layout (all binary) so it is self-describing & store-agnostic:
+//   magic "VRM2" (4) | nonce(12) | tag(16) | ct
+// ChaCha20-Poly1305 under the 32-byte SHARED_KEY. Any machine with the key decrypts.
+// Tier-3 refinement: per-pusher Ed25519 sigs + per-device multi-recipient key wrapping.
+const MAGIC = Buffer.from("VRM2");
+function encryptBlock(plain) {
+  const nonce = crypto.randomBytes(12);
+  const c = crypto.createCipheriv("chacha20-poly1305", SHARED_KEY, nonce, { authTagLength: 16 });
+  const ct = Buffer.concat([c.update(plain), c.final()]);
+  const tag = c.getAuthTag();
+  return Buffer.concat([MAGIC, nonce, tag, ct]);
+}
+function decryptBlock(buf) {
+  if (!buf.subarray(0, 4).equals(MAGIC)) fail("not a verum block (bad magic)");
+  let o = 4;
+  const nonce = buf.subarray(o, o += 12);
+  const tag = buf.subarray(o, o += 16);
+  const ct = buf.subarray(o);
+  const d = crypto.createDecipheriv("chacha20-poly1305", SHARED_KEY, nonce, { authTagLength: 16 });
+  d.setAuthTag(tag);
+  try { return Buffer.concat([d.update(ct), d.final()]); }
+  catch (e) { fail("AEAD decrypt failed — " + e.message); }
+}
+
+// ── substrate block store (THE SUBSTRATE SEAM) ────────────────────────────────────
+// Local dir is the primary layer; blocks also replicate over SSH to VERUM_PEERS (host
+// aliases). The remote block dir is the SAME absolute path as local. With no peers set,
+// behavior is identical to a plain dir store (no ssh calls). Tier-3: an M3-network transport.
+// Interface contract: put(buf)->id ; get(id)->buf ; has(id)->bool.
+const VERUM_PEERS = (process.env.VERUM_PEERS || "").split(/[\s,]+/).filter(Boolean);
+function shellQuote(s) { return "'" + s.replace(/'/g, "'\\''") + "'"; }
+function makeSubstrateStore(dir) {
+  const blocks = path.join(dir, "blocks");
+  const SSH = (peer, args, opts) =>
+    execFileSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", peer, ...args], opts);
+  return {
+    put(buf) {
+      const id = crypto.createHash("sha256").update(buf).digest("hex"); // address = sha256(ciphertext)
+      fs.mkdirSync(blocks, { recursive: true });
+      const p = path.join(blocks, id);
+      if (!fs.existsSync(p)) fs.writeFileSync(p, buf);
+      for (const peer of VERUM_PEERS) {
+        try {
+          SSH(peer, [`mkdir -p ${shellQuote(blocks)} && cat > ${shellQuote(path.join(blocks, id))}`],
+            { input: buf, stdio: ["pipe", "ignore", "ignore"] });
+        } catch (e) { dbg(`peer ${peer} put failed for ${id.slice(0, 12)}: ${e.message}`); }
+      }
+      return id;
+    },
+    get(id) {
+      const p = path.join(blocks, id);
+      if (fs.existsSync(p)) return fs.readFileSync(p);
+      for (const peer of VERUM_PEERS) {
+        try {
+          const buf = SSH(peer, [`cat ${shellQuote(path.join(blocks, id))}`],
+            { stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 30 });
+          if (buf && buf.length) {
+            fs.mkdirSync(blocks, { recursive: true });
+            fs.writeFileSync(p, buf);            // cache locally
+            return buf;
+          }
+        } catch (e) { dbg(`peer ${peer} get failed for ${id.slice(0, 12)}: ${e.message}`); }
+      }
+      fail(`block not found on self or peers: ${id}`);
+    },
+    has(id) {
+      if (fs.existsSync(path.join(blocks, id))) return true;
+      for (const peer of VERUM_PEERS) {
+        try {
+          SSH(peer, [`test -f ${shellQuote(path.join(blocks, id))}`], { stdio: ["ignore", "ignore", "ignore"] });
+          return true;                           // ssh exit 0 → file present
+        } catch (e) { /* exit !=0 → not on this peer (or unreachable); keep trying */ }
+      }
+      return false;
+    },
+  };
+}
+
+// ── small helpers ─────────────────────────────────────────────────────────────
+function pickHead(refNames) {
+  for (const pref of ["refs/heads/main", "refs/heads/master"]) if (refNames.includes(pref)) return pref;
+  return refNames.find((r) => r.startsWith("refs/heads/")) || refNames[0] || null;
+}
+function compress(buf) { return zlib.gzipSync(buf); }
+function decompress(buf) { return zlib.gunzipSync(buf); }
+function parseNamespace(u) {
+  const m = /^verum:\/\/(.+)$/.exec(u || "");
+  if (!m) return null;
+  return m[1].replace(/\/+$/, "").replace(/[^A-Za-z0-9._\-\/]/g, "_");
+}
+function rawPub(keyObj) { return keyObj.export({ type: "spki", format: "der" }).subarray(-32).toString("base64"); }
+function x25519PubFromRaw(b64) {
+  const der = Buffer.concat([Buffer.from("302a300506032b656e032100", "hex"), Buffer.from(b64, "base64")]);
+  return crypto.createPublicKey({ key: der, format: "der", type: "spki" });
+}
+function out(s) { dbg(`>> ${JSON.stringify(s)}`); process.stdout.write(s + "\n"); }
+function dbg(s) { if (DEBUG) process.stderr.write(`[verum] ${s}\n`); }
+function fail(m) { process.stderr.write("git-remote-verum: " + m + "\n"); process.exit(1); }
+
+// ── line reader over stdin that can also hand back raw bytes for the export stream ──
+function lineReader(stream) {
+  let buf = Buffer.alloc(0);
+  let ended = false;
+  const waiters = [];
+  stream.on("data", (d) => { buf = Buffer.concat([buf, d]); pump(); });
+  stream.on("end", () => { ended = true; pump(); });
+  stream.on("error", () => { ended = true; pump(); });
+
+  function takeLine() {
+    const i = buf.indexOf(0x0a);
+    if (i === -1) return undefined;
+    const line = buf.subarray(0, i).toString("utf8");
+    buf = buf.subarray(i + 1);
+    return line;
+  }
+  function pump() {
+    while (waiters.length) {
+      const w = waiters[0];
+      if (w.kind === "line") {
+        const l = takeLine();
+        if (l !== undefined) { waiters.shift(); w.resolve(l); continue; }
+        if (ended) { waiters.shift(); w.resolve(null); continue; }
+        return;
+      } else if (w.kind === "doneRaw") {
+        // Accumulate until we see a line exactly "done" OR EOF. Return raw bytes consumed.
+        const idx = findDone(buf);
+        if (idx !== -1) {
+          const consumed = buf.subarray(0, idx);
+          buf = buf.subarray(idx);
+          waiters.shift(); w.resolve(consumed);
+          continue;
+        }
+        if (ended) { const consumed = buf; buf = Buffer.alloc(0); waiters.shift(); w.resolve(consumed); continue; }
+        return;
+      }
+    }
+  }
+  // find the byte offset just past a line that is exactly "done"
+  function findDone(b) {
+    let start = 0;
+    for (;;) {
+      const nl = b.indexOf(0x0a, start);
+      if (nl === -1) return -1;
+      const line = b.subarray(start, nl).toString("latin1");
+      if (line === "done") return nl + 1;   // include the done\n in the consumed range
+      start = nl + 1;
+    }
+  }
+  return {
+    next() { return new Promise((resolve) => { waiters.push({ kind: "line", resolve }); pump(); }); },
+    readUntilDoneRaw() { return new Promise((resolve) => { waiters.push({ kind: "doneRaw", resolve }); pump(); }); },
+  };
+}
