@@ -40,6 +40,7 @@ done
 # export/import/merge/pubkey tools. Installing these here makes ./install.sh the
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
 for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh git-remote-verum \
+         mae-pulse-daemon.mjs \
          claude-hook-substrate-guard.mjs \
          claude-hook-memory-hygiene.mjs memory-hygiene-audit.mjs \
          mae-substrate-export.mjs mae-substrate-import.mjs mae-substrate-merge.mjs mae-verum-pubkeys.mjs; do
@@ -174,6 +175,43 @@ case "$(uname)" in
     echo "  Linux: copy runtime/systemd/memory-index-watcher.service to ~/.config/systemd/user/ then 'systemctl --user enable --now memory-index-watcher'"
     ;;
 esac
+
+# --- mae-pulse-daemon (real-time substrate runtime) --------------------------
+# Generates peers.json from operator's verum-ed25519 pub key + renders launchd
+# plist. Runs ONLY if the operator's signing key exists locally (single-operator
+# mesh; key replicated via initial setup).
+PULSE_BIN="${HOME}/.bin/mae-pulse-daemon.mjs"
+PULSE_KEY="${HOME}/.verum/operator-ed25519.key"
+PULSE_PUB="${HOME}/.verum/operator-ed25519.pub"
+PULSE_PEERS="${HOME}/.local/share/mae-substrate/pulse/peers.json"
+PULSE_PLIST_SRC="$SCRIPT_DIR/runtime/launchd/com.mae.pulse-daemon.plist"
+
+if [ -f "$PULSE_BIN" ] && [ -f "$PULSE_KEY" ] && [ -f "$PULSE_PUB" ]; then
+  mkdir -p "$(dirname "$PULSE_PEERS")"
+  if [ ! -f "$PULSE_PEERS" ] || ! grep -q "pub_key_pem" "$PULSE_PEERS" 2>/dev/null; then
+    # Generate peers.json from pub key (idempotent — overwrites only on key change)
+    PUB_PEM=$(awk 'NR==1{printf "%s", $0; next}{printf "\\n%s", $0}' "$PULSE_PUB")
+    cat > "$PULSE_PEERS" <<EOF
+{
+  "noodles":  { "ip": "192.168.100.2",  "port": 38478, "pub_key_pem": "$PUB_PEM" },
+  "sequoia":  { "ip": "192.168.100.14", "port": 38478, "pub_key_pem": "$PUB_PEM" },
+  "tunafish": { "ip": "192.168.100.10", "port": 38478, "pub_key_pem": "$PUB_PEM" }
+}
+EOF
+    echo "  generated $PULSE_PEERS"
+  else
+    echo "  peers.json already present ($PULSE_PEERS)"
+  fi
+  if [ "$(uname)" = "Darwin" ] && [ -f "$PULSE_PLIST_SRC" ]; then
+    PULSE_PLIST_DEST="${HOME}/Library/LaunchAgents/com.mae.pulse-daemon.plist"
+    sed "s|\$HOME|${HOME}|g" "$PULSE_PLIST_SRC" > "$PULSE_PLIST_DEST"
+    launchctl unload "$PULSE_PLIST_DEST" 2>/dev/null || true
+    launchctl load "$PULSE_PLIST_DEST"
+    echo "  installed mae-pulse-daemon at $PULSE_PLIST_DEST"
+  fi
+else
+  echo "  (skipping mae-pulse-daemon: missing $PULSE_BIN or $PULSE_KEY)"
+fi
 
 # --- substrate crons (per-host, idempotent) ----------------------------------
 # vault-autosync on ALL hosts; brain-sync per-host with a staggered minute and a
