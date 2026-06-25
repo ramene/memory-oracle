@@ -40,6 +40,7 @@ done
 # export/import/merge/pubkey tools. Installing these here makes ./install.sh the
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
 for f in brain-sync.sh vault-autosync.sh git-remote-verum claude-hook-substrate-guard.mjs \
+         claude-hook-memory-hygiene.mjs memory-hygiene-audit.mjs \
          mae-substrate-export.mjs mae-substrate-import.mjs mae-substrate-merge.mjs mae-verum-pubkeys.mjs; do
   if [ -f "$SCRIPT_DIR/bin/$f" ]; then
     cp "$SCRIPT_DIR/bin/$f" "$BIN_DIR/$f"
@@ -125,6 +126,17 @@ if not has_command(pt, "claude-hook-substrate-guard.mjs"):
 else:
     print("  PreToolUse(Bash) substrate guard already registered")
 
+# PreToolUse(Write|Edit|NotebookEdit) -> memory-hygiene guard
+if not has_command(pt, "claude-hook-memory-hygiene.mjs"):
+    pt.append({
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [{"type": "command", "command": "node $HOME/.bin/claude-hook-memory-hygiene.mjs"}],
+    })
+    changed = True
+    print("  registered PreToolUse(Write|Edit|NotebookEdit) -> claude-hook-memory-hygiene.mjs")
+else:
+    print("  PreToolUse(Write|Edit|NotebookEdit) memory-hygiene guard already registered")
+
 if changed:
     with open(settings, "w") as f:
         json.dump(data, f, indent=2)
@@ -183,7 +195,9 @@ echo "[memory-oracle] installing substrate crons for mesh node '$HOST_MESH' (hos
 
 VAULT_MARK="# memory-oracle:vault-autosync"
 BRAIN_MARK="# memory-oracle:brain-sync"
+HYGIENE_MARK="# memory-oracle:memory-hygiene-audit"
 VAULT_LINE="*/3 * * * * \$HOME/.bin/vault-autosync.sh >> \$HOME/.claude-tmp/vault-autosync.log 2>&1 $VAULT_MARK"
+HYGIENE_LINE="0 10 * * * \$HOME/.bin/memory-hygiene-audit.mjs >> \$HOME/.claude-tmp/memory-hygiene-audit.log 2>&1 $HYGIENE_MARK"
 
 case "$HOST_MESH" in
   noodles)  BRAIN_SCHED="*/15 * * * *";       BRAIN_MACHINES="local,sequoia,tunafish" ;;
@@ -195,10 +209,12 @@ esac
 # current crontab (empty if none), with our marked lines stripped
 # strip BOTH our marked lines AND any pre-existing unmarked vault-autosync/brain-sync
 # lines (from manual setups) so re-running never duplicates the cron.
-CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh' || true)"
+CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh|memory-hygiene-audit\.mjs' || true)"
 NEW_CRON="$CURRENT_CRON
-$VAULT_LINE"
+$VAULT_LINE
+$HYGIENE_LINE"
 echo "  + vault-autosync: */3 (all hosts)"
+echo "  + memory-hygiene-audit: daily 10:00 (all hosts)"
 if [ -n "$BRAIN_SCHED" ]; then
   BRAIN_LINE="$BRAIN_SCHED BRAIN_MACHINES=$BRAIN_MACHINES \$HOME/.bin/brain-sync.sh >> \$HOME/.claude-tmp/brain-sync.log 2>&1 $BRAIN_MARK"
   NEW_CRON="$NEW_CRON
