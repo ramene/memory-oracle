@@ -45,6 +45,13 @@ const SECRET_KEY_PATH = `${HOME}/.verum/operator-ed25519.key`;
 const VAULT_WRITE_TX = `${HOME}/.bin/vault-write-tx.sh`;
 const VAULT_AUTOSYNC = `${HOME}/.bin/vault-autosync.sh`;
 const HOSTNAME = (() => {
+  // Prefer mesh-canonical name written by install.sh (noodles/sequoia/tunafish)
+  // — sequoia's hostname is "Ramenes-MacBook-Pro-7", not "sequoia".
+  const meshPath = `${os.homedir()}/.local/share/mae-substrate/.host-mesh`;
+  if (fs.existsSync(meshPath)) {
+    const mesh = fs.readFileSync(meshPath, 'utf8').trim();
+    if (mesh) return mesh;
+  }
   try { return require('node:child_process').execSync('hostname -s', {encoding:'utf8'}).trim(); }
   catch { return os.hostname().split('.')[0]; }
 })();

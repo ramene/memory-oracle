@@ -230,6 +230,10 @@ case "$LAN_IP" in
   *)                              HOST_MESH="$HOST_SHORT" ;;
 esac
 mkdir -p "$HOME/.claude-tmp"
+# Write mesh-canonical hostname for any daemons that need it (e.g. mae-pulse-daemon
+# — sequoia's `hostname -s` returns "Ramenes-MacBook-Pro-7", not "sequoia").
+mkdir -p "$HOME/.local/share/mae-substrate"
+echo -n "$HOST_MESH" > "$HOME/.local/share/mae-substrate/.host-mesh"
 echo "[memory-oracle] installing substrate crons for mesh node '$HOST_MESH' (host $HOST_SHORT, ip ${LAN_IP:-?})..."
 
 VAULT_MARK="# memory-oracle:vault-autosync"
