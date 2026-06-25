@@ -204,10 +204,16 @@ EOF
   fi
   if [ "$(uname)" = "Darwin" ] && [ -f "$PULSE_PLIST_SRC" ]; then
     PULSE_PLIST_DEST="${HOME}/Library/LaunchAgents/com.mae.pulse-daemon.plist"
-    sed "s|\$HOME|${HOME}|g" "$PULSE_PLIST_SRC" > "$PULSE_PLIST_DEST"
-    launchctl unload "$PULSE_PLIST_DEST" 2>/dev/null || true
-    launchctl load "$PULSE_PLIST_DEST"
-    echo "  installed mae-pulse-daemon at $PULSE_PLIST_DEST"
+    # Discover node binary path (Apple Silicon → /opt/homebrew, Intel → /usr/local).
+    NODE_BIN="$(command -v node 2>/dev/null || true)"
+    if [ -z "$NODE_BIN" ]; then
+      echo "  ⚠ node not found in PATH — mae-pulse-daemon plist needs manual node path"
+    else
+      sed -e "s|\$NODE_BIN|${NODE_BIN}|g" -e "s|\$HOME|${HOME}|g" "$PULSE_PLIST_SRC" > "$PULSE_PLIST_DEST"
+      launchctl unload "$PULSE_PLIST_DEST" 2>/dev/null || true
+      launchctl load "$PULSE_PLIST_DEST"
+      echo "  installed mae-pulse-daemon at $PULSE_PLIST_DEST (node=$NODE_BIN)"
+    fi
   fi
 else
   echo "  (skipping mae-pulse-daemon: missing $PULSE_BIN or $PULSE_KEY)"

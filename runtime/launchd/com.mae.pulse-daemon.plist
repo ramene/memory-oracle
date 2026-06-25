@@ -6,7 +6,7 @@
   <string>com.mae.pulse-daemon</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/node</string>
+    <string>$NODE_BIN</string>
     <string>$HOME/.bin/mae-pulse-daemon.mjs</string>
   </array>
   <key>RunAtLoad</key>
