@@ -27,12 +27,18 @@ TS=$(date -u +%FT%TZ); HOST=$(hostname -s)
     echo '$TS $HOST pull-conflict (skipped; will retry)'
     exit 0
   fi
-  # push local changes, if any
+  # commit working-tree changes if any
   if [ -n \"\$(git status --porcelain)\" ]; then
     git add -A
     git commit -q -m 'vault auto-sync $HOST $TS' >/dev/null 2>&1
+  fi
+  # push if local is ahead of origin/main (covers BOTH freshly-committed AND
+  # pre-existing-but-unpushed commits — e.g. from another session that
+  # committed but didn't push, the 2026-06-25 soft-launch case)
+  AHEAD=\$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
+  if [ \"\$AHEAD\" -gt 0 ]; then
     if git push origin main >/dev/null 2>&1; then
-      echo '$TS $HOST pushed'
+      echo '$TS $HOST pushed (commits=\$AHEAD)'
     else
       echo '$TS $HOST push-failed'
     fi
