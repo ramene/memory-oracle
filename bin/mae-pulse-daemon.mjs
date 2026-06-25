@@ -31,7 +31,7 @@
 
 import dgram from 'node:dgram';
 import fs from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync, execSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
@@ -64,11 +64,12 @@ const PRESENCE_INTERVAL_MS = 60_000;
 const PROTOCOL_VERSION = 1;
 
 const IGNORE_PATHS = [
-  /\/\.git\//,
+  /(^|\/)\.git(\/|$)/,                   // .git/ directory at any depth (also catches `.git` as top-level filename from fs.watch)
   /\/\.obsidian\/workspace.*\.json$/,
   /\/\.obsidian\/cache$/,
   /\/_review-/,                          // soft-launch staging area — too noisy
   /\.swp$/, /\.tmp$/, /~$/,
+  /\.lock$/,
 ];
 
 // ─── Log ────────────────────────────────────────────────────────────────────
@@ -161,9 +162,13 @@ function setSuppression() { suppressUntil = Date.now() + SUPPRESSION_MS; }
 
 // ─── Pull / push ────────────────────────────────────────────────────────────
 function runAutosync(reason, callback) {
-  const proc = spawn(VAULT_WRITE_TX,
-    [`mae-pulse@${HOSTNAME}:${reason}`, '--', VAULT_AUTOSYNC],
-    { stdio: 'pipe' });
+  // vault-autosync.sh ALREADY wraps its own git ops in vault-write-tx.
+  // DO NOT wrap it again — nested same-lock = self-deadlock at the 60s timeout.
+  // Pass reason via env so the inner lock's reason reflects who called.
+  const proc = spawn(VAULT_AUTOSYNC, [], {
+    stdio: 'pipe',
+    env: { ...process.env, MAE_PULSE_REASON: `mae-pulse@${HOSTNAME}:${reason}` },
+  });
   let out = '';
   proc.stdout.on('data', d => { out += d.toString(); });
   proc.stderr.on('data', d => { out += d.toString(); });
@@ -172,26 +177,54 @@ function runAutosync(reason, callback) {
   });
 }
 
+// Discover git binary once at startup — launchd's PATH may differ from interactive shell
+function findGit() {
+  const candidates = [
+    '/opt/homebrew/bin/git',
+    '/usr/local/bin/git',
+    '/usr/bin/git',
+    process.env.HOME + '/.bin/git',
+  ];
+  for (const p of candidates) {
+    try { if (fs.statSync(p).isFile()) return p; } catch {}
+  }
+  try { return execSync('command -v git', {encoding:'utf8', shell:'/bin/bash'}).trim() || 'git'; }
+  catch { return 'git'; }
+}
+const GIT = findGit();
+
 function currentCommit() {
   try {
-    return require('node:child_process')
-      .execFileSync('git', ['-C', VAULT, 'rev-parse', 'HEAD'], {encoding:'utf8'}).trim().slice(0,12);
-  } catch { return 'unknown'; }
+    return execFileSync(GIT, ['-C', VAULT, 'rev-parse', '--short=12', 'HEAD'], {encoding:'utf8'}).trim();
+  } catch (e) {
+    log(`currentCommit failed: ${e.message}`, 'warn');
+    return 'unknown';
+  }
 }
 
 // ─── Outbound: watch vault → debounce → autosync → broadcast PULSE ──────────
+// inflight: skip new autosyncs while one is running (the daemon's own git ops
+// trigger fs.watch — without this we'd queue redundant autosyncs that
+// lock-timeout while the first one completes).
 let debounceTimer = null;
+let autosyncInflight = false;
 function onLocalChange(filePath) {
-  // Filter ignored paths
   if (IGNORE_PATHS.some(re => re.test(filePath))) return;
   if (inSuppressionWindow()) return;
+  if (autosyncInflight) return;     // already running; skip
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
+    if (autosyncInflight) return;
+    autosyncInflight = true;
     log(`change detected → autosync`);
     runAutosync('outbound', (code, out) => {
+      autosyncInflight = false;
       if (code !== 0) { log(`autosync failed rc=${code}: ${out}`, 'warn'); return; }
       const commit = currentCommit();
+      setSuppression();             // suppress for 5s so peers' incoming PULSE→our pull
+                                    // doesn't echo back, AND our own git-write fs.watch
+                                    // chatter doesn't re-trigger
       broadcastPulse(commit);
     });
   }, DEBOUNCE_MS);

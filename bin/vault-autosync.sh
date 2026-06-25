@@ -38,9 +38,9 @@ TS=$(date -u +%FT%TZ); HOST=$(hostname -s)
   AHEAD=\$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
   if [ \"\$AHEAD\" -gt 0 ]; then
     if git push origin main >/dev/null 2>&1; then
-      echo '$TS $HOST pushed (commits=\$AHEAD)'
+      echo \"$TS $HOST pushed (commits=\$AHEAD)\"
     else
-      echo '$TS $HOST push-failed'
+      echo \"$TS $HOST push-failed\"
     fi
   fi
 "
