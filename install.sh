@@ -39,7 +39,8 @@ done
 # the sovereign git remote-helper, the substrate guard hook, and the M3
 # export/import/merge/pubkey tools. Installing these here makes ./install.sh the
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
-for f in brain-sync.sh vault-autosync.sh git-remote-verum claude-hook-substrate-guard.mjs \
+for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh git-remote-verum \
+         claude-hook-substrate-guard.mjs \
          claude-hook-memory-hygiene.mjs memory-hygiene-audit.mjs \
          mae-substrate-export.mjs mae-substrate-import.mjs mae-substrate-merge.mjs mae-verum-pubkeys.mjs; do
   if [ -f "$SCRIPT_DIR/bin/$f" ]; then
