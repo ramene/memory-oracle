@@ -35,6 +35,24 @@ TS=$(date -u +%FT%TZ); HOST=$(hostname -s)
   # submodule pointer, git status will show the gitlink as modified and the
   # commit block below will record + push the advance.
   git submodule update --init --recursive --remote >/dev/null 2>&1 || true
+  # SAFEGUARD (2026-06-26 incident): refuse to commit if any tracked
+  # .obsidian/*.json file shrunk to <10 bytes when its previous version was
+  # >50 bytes. Obsidian momentarily writes empty files during plugin
+  # enable/disable + restart, and the cron's commit-grab can catch that
+  # half-state. Without this check, the empty file gets cluster-propagated
+  # and breaks Obsidian on every node.
+  SHRUNK=\$(git status --porcelain .obsidian/ 2>/dev/null | awk '/^.M / {print \$2}' | while read f; do
+    cur=\$(wc -c < \"\$f\" 2>/dev/null || echo 0)
+    prev=\$(git show HEAD:\"\$f\" 2>/dev/null | wc -c || echo 0)
+    if [ \"\$cur\" -lt 10 ] && [ \"\$prev\" -gt 50 ]; then echo \"\$f\"; fi
+  done)
+  if [ -n \"\$SHRUNK\" ]; then
+    echo \"$TS $HOST refused: suspected corruption (.obsidian file truncated): \$SHRUNK\"
+    # Restore the shrunk files from HEAD so the commit doesn't include them
+    for f in \$SHRUNK; do
+      git checkout HEAD -- \"\$f\" 2>/dev/null
+    done
+  fi
   # Commit working-tree changes (including submodule pointer advances)
   if [ -n \"\$(git status --porcelain)\" ]; then
     git add -A
