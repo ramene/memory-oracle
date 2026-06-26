@@ -21,23 +21,30 @@ TS=$(date -u +%FT%TZ); HOST=$(hostname -s)
 # All git operations happen INSIDE the transaction lock.
 "$HOME/.bin/vault-write-tx.sh" "vault-autosync@$HOST" -- bash -c "
   set -e
-  # pull first (rebase local edits on top of remote; stash dirty tree during rebase)
-  if ! git pull --rebase --autostash origin main >/dev/null 2>&1; then
+  # Pull vault first, RECURSING into submodules so they fetch + advance to the
+  # commit recorded in the parent (the 2026-06-25 submodule footgun fix:
+  # without --recurse-submodules, submodule local clones never fetch new
+  # upstream commits and stay stale even when the parent pointer advances).
+  if ! git pull --rebase --autostash --recurse-submodules origin main >/dev/null 2>&1; then
     git rebase --abort >/dev/null 2>&1
     echo '$TS $HOST pull-conflict (skipped; will retry)'
     exit 0
   fi
-  # commit working-tree changes if any
+  # Advance submodules to their UPSTREAM HEADs (--remote) — operator-owned repos
+  # like architecture-notes auto-follow their main branch. If this advances any
+  # submodule pointer, git status will show the gitlink as modified and the
+  # commit block below will record + push the advance.
+  git submodule update --init --recursive --remote >/dev/null 2>&1 || true
+  # Commit working-tree changes (including submodule pointer advances)
   if [ -n \"\$(git status --porcelain)\" ]; then
     git add -A
     git commit -q -m 'vault auto-sync $HOST $TS' >/dev/null 2>&1
   fi
-  # push if local is ahead of origin/main (covers BOTH freshly-committed AND
-  # pre-existing-but-unpushed commits — e.g. from another session that
-  # committed but didn't push, the 2026-06-25 soft-launch case)
+  # Push if local is ahead of origin/main (covers freshly-committed AND
+  # pre-existing-but-unpushed commits — the 2026-06-25 soft-launch case)
   AHEAD=\$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
   if [ \"\$AHEAD\" -gt 0 ]; then
-    if git push origin main >/dev/null 2>&1; then
+    if git push --recurse-submodules=check origin main >/dev/null 2>&1; then
       echo \"$TS $HOST pushed (commits=\$AHEAD)\"
     else
       echo \"$TS $HOST push-failed\"
