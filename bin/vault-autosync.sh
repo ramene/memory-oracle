@@ -30,11 +30,11 @@ TS=$(date -u +%FT%TZ); HOST=$(hostname -s)
     echo '$TS $HOST pull-conflict (skipped; will retry)'
     exit 0
   fi
-  # Advance submodules to their UPSTREAM HEADs (--remote) — operator-owned repos
-  # like architecture-notes auto-follow their main branch. If this advances any
-  # submodule pointer, git status will show the gitlink as modified and the
-  # commit block below will record + push the advance.
-  git submodule update --init --recursive --remote >/dev/null 2>&1 || true
+  # Submodules follow the pointer recorded in the parent (no --remote — that
+  # forced a network fetch EVERY 3 MINUTES which piled cron processes and ate
+  # CPU on slow networks). To advance an operator-owned submodule, push to
+  # its upstream + bump the pointer manually OR use a separate hourly cron.
+  git submodule update --init --recursive >/dev/null 2>&1 || true
   # SAFEGUARD (2026-06-26 incident): refuse to commit if any tracked
   # .obsidian/*.json file shrunk to <10 bytes when its previous version was
   # >50 bytes. Obsidian momentarily writes empty files during plugin
