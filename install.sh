@@ -245,7 +245,9 @@ echo "[memory-oracle] installing substrate crons for mesh node '$HOST_MESH' (hos
 VAULT_MARK="# memory-oracle:vault-autosync"
 BRAIN_MARK="# memory-oracle:brain-sync"
 HYGIENE_MARK="# memory-oracle:memory-hygiene-audit"
+WALKER_MARK="# memory-oracle:walker-current"
 VAULT_LINE="*/3 * * * * \$HOME/.bin/vault-autosync.sh >> \$HOME/.claude-tmp/vault-autosync.log 2>&1 $VAULT_MARK"
+WALKER_LINE="*/5 * * * * \$HOME/.bin/walk-session-jsonl-nightly.sh --current >> \$HOME/.claude-tmp/walk-session-jsonl-nightly.log 2>&1 $WALKER_MARK"
 HYGIENE_LINE="0 10 * * * \$HOME/.bin/memory-hygiene-audit.mjs >> \$HOME/.claude-tmp/memory-hygiene-audit.log 2>&1 $HYGIENE_MARK"
 
 case "$HOST_MESH" in
@@ -258,11 +260,13 @@ esac
 # current crontab (empty if none), with our marked lines stripped
 # strip BOTH our marked lines AND any pre-existing unmarked vault-autosync/brain-sync
 # lines (from manual setups) so re-running never duplicates the cron.
-CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh|memory-hygiene-audit\.mjs' || true)"
+CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh|memory-hygiene-audit\.mjs|walk-session-jsonl-nightly\.sh --current' || true)"
 NEW_CRON="$CURRENT_CRON
 $VAULT_LINE
+$WALKER_LINE
 $HYGIENE_LINE"
 echo "  + vault-autosync: */3 (all hosts)"
+echo "  + walker --current: */5 (all hosts) — keeps live session BM25-searchable"
 echo "  + memory-hygiene-audit: daily 10:00 (all hosts)"
 if [ -n "$BRAIN_SCHED" ]; then
   BRAIN_LINE="$BRAIN_SCHED BRAIN_MACHINES=$BRAIN_MACHINES \$HOME/.bin/brain-sync.sh >> \$HOME/.claude-tmp/brain-sync.log 2>&1 $BRAIN_MARK"
