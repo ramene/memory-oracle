@@ -161,13 +161,17 @@ function render() {
   out += '\n';
   // Table header
   out += BOLD + pad('  DEVICE', 14) + pad('HEAD', 16) + pad('ORIGIN', 16) + pad('PID', 10) +
-                 pad('LAST PRES', 14) + pad('LAST PULSE', 14) + 'STATUS' + RESET + '\n';
+                 pad('ALIVE (60s)', 14) + pad('LAST CHANGE', 14) + 'STATUS' + RESET + '\n';
   out += DIM + '  ' + '─'.repeat(95) + RESET + '\n';
   for (const s of states) {
     const head = s.head === '?' ? RED + '?' + RESET : colorHead(s.head, maxHead);
     const orig = s.originHead === '?' ? RED + '?' + RESET : colorHead(s.originHead, maxHead);
+    // Presence fires every 60s — fresh = ALIVE. Pulse fires only on vault changes — silence is NORMAL.
+    const presAge = s.lastSentPresence ? (Date.now() - new Date(s.lastSentPresence).getTime()) / 1000 : Infinity;
+    const presStr = !s.lastSentPresence ? '-' : presAge < 120 ? GREEN + age(s.lastSentPresence) + RESET : YELLOW + age(s.lastSentPresence) + RESET;
+    const pulseStr = !s.lastSentPulse ? DIM + 'idle' + RESET : age(s.lastSentPulse);
     out += '  ' + pad(s.name, 12) + pad(head, 14) + pad(orig, 14) + pad(s.daemonPid, 10) +
-                  pad(age(s.lastSentPresence), 12) + pad(age(s.lastSentPulse), 14) +
+                  pad(presStr, 12) + pad(pulseStr, 14) +
                   colorStatus(s) + '\n';
   }
   out += '\n';
@@ -176,6 +180,7 @@ function render() {
   } else {
     out += YELLOW + `  ! cluster has divergent HEADs — newest=${maxHead}` + RESET + '\n';
   }
+  out += DIM + `  ALIVE = presence beacon (every 60s, freshness = daemon up).  LAST CHANGE = pulse broadcast (on vault edits only; "idle" = no edits yet, NOT down).` + RESET + '\n';
   if (WATCH) out += DIM + `\n  (refreshes every ${INTERVAL/1000}s · Ctrl-C to exit)` + RESET + '\n';
   process.stdout.write(out);
 }
