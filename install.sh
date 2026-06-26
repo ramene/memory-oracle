@@ -28,9 +28,13 @@ fi
 # --- copy binaries -----------------------------------------------------------
 BIN_DIR="${HOME}/.bin"
 mkdir -p "$BIN_DIR"
+# _VENDORED accumulates every basename the vendor for-loops install this run.
+# The propagation self-check below diffs it against bin/ to catch unvendored tools.
+_VENDORED=""
 for f in memory-merge.mjs memory-search.mjs memory-index-build.mjs memory-structural-index.mjs memory-cite.mjs; do
   cp "$SCRIPT_DIR/bin/$f" "$BIN_DIR/$f"
   chmod +x "$BIN_DIR/$f"
+  _VENDORED="$_VENDORED $f"
   echo "  installed $BIN_DIR/$f"
 done
 
@@ -50,11 +54,33 @@ for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh repo-write-tx.sh \
   if [ -f "$SCRIPT_DIR/bin/$f" ]; then
     cp "$SCRIPT_DIR/bin/$f" "$BIN_DIR/$f"
     chmod +x "$BIN_DIR/$f"
+    _VENDORED="$_VENDORED $f"
     echo "  installed $BIN_DIR/$f"
   else
     echo "  (skipping $f: not vendored in bin/)"
   fi
 done
+
+# --- propagation self-check (loud failure on unvendored bin/ tools) ----------
+# Forensic lesson (2026-06-26, fix commit ab30be6): a tool placed in bin/ but NOT
+# named in a vendor for-loop above is silently skipped while install.sh still exits
+# 0 — which makes "all nodes synced" a lie (see the 2026-06-25/26 install.sh arc).
+# This guard walks bin/ and FAILS LOUDLY if any *.mjs/*.sh there went uninstalled.
+VENDOR_DRIFT=0
+for src in "$SCRIPT_DIR"/bin/*.mjs "$SCRIPT_DIR"/bin/*.sh; do
+  [ -e "$src" ] || continue   # tolerate an empty glob
+  base="$(basename "$src")"
+  case " $_VENDORED " in
+    *" $base "*) : ;;          # installed by a vendor for-loop above — good
+    *)
+      echo "  ⚠ PROPAGATION GAP: bin/$base is in bin/ but NOT in any install.sh vendor for-loop — it will NOT reach peers" >&2
+      VENDOR_DRIFT=1
+      ;;
+  esac
+done
+if [ "$VENDOR_DRIFT" -eq 0 ]; then
+  echo "  ✓ propagation self-check: every bin/*.{mjs,sh} is vendored"
+fi
 
 cp "$SCRIPT_DIR/hooks/claude-hook-session-start.sh" "$BIN_DIR/claude-hook-session-start.sh"
 chmod +x "$BIN_DIR/claude-hook-session-start.sh"
@@ -371,3 +397,13 @@ echo "[memory-oracle] install complete."
 echo ""
 echo "Try:    memory-search 'your topic here'"
 echo "Or:     memory-cite SESSION_ID --info"
+
+# Non-zero exit if the propagation self-check found unvendored bin/ tools.
+# Deliberately the LAST thing the script does so all install work still completes.
+if [ "${VENDOR_DRIFT:-0}" -ne 0 ]; then
+  echo "" >&2
+  echo "install.sh: COMPLETED WITH PROPAGATION GAPS (see ⚠ above)." >&2
+  echo "Add each flagged bin/ tool to a vendor for-loop, then re-run. Until then," >&2
+  echo "do NOT claim peers are synced — exit-code 0 would be a lie." >&2
+  exit 17
+fi
