@@ -19,11 +19,29 @@ const args = process.argv.slice(2);
 
 if (!existsSync(DB_PATH)) { console.error(`error: no index at ${DB_PATH}. Run memory-index-build first.`); process.exit(2); }
 
+// Retry-on-lock: when the launchd memory-index-watcher holds the write lock
+// during fs-event handling, structural-backfill queries get SQLITE_BUSY and
+// must retry. PRAGMA-via-stdin approach polluted JSON output; -cmd approach
+// emitted PRAGMA result; cleanest is retry the spawnSync up to ~5s total.
+// Closes the 2026-06-26 install.sh race that failed at row 11.
+const MAX_LOCK_RETRIES = 50;
+const LOCK_RETRY_MS = 100;
 function sql(q, json=false) {
   const argv = json ? ['-json', DB_PATH] : [DB_PATH];
-  const r = spawnSync('sqlite3', argv, { input: q, encoding: 'utf8', maxBuffer: 100*1024*1024 });
-  if (r.status !== 0) throw new Error(`sqlite3 failed: ${r.stderr}\nquery: ${q.slice(0,200)}`);
-  return json ? (r.stdout.trim() ? JSON.parse(r.stdout) : []) : r.stdout;
+  let lastStderr = '';
+  for (let attempt = 1; attempt <= MAX_LOCK_RETRIES; attempt++) {
+    const r = spawnSync('sqlite3', argv, { input: q, encoding: 'utf8', maxBuffer: 100*1024*1024 });
+    if (r.status === 0) {
+      return json ? (r.stdout.trim() ? JSON.parse(r.stdout) : []) : r.stdout;
+    }
+    lastStderr = r.stderr || '';
+    if (!lastStderr.includes('database is locked')) {
+      throw new Error(`sqlite3 failed: ${lastStderr}\nquery: ${q.slice(0,200)}`);
+    }
+    // Lock contention — wait briefly then retry (sync sleep via /bin/sleep)
+    spawnSync('sleep', [(LOCK_RETRY_MS / 1000).toString()]);
+  }
+  throw new Error(`sqlite3 failed after ${MAX_LOCK_RETRIES} lock-retries (~${MAX_LOCK_RETRIES * LOCK_RETRY_MS / 1000}s): ${lastStderr}\nquery: ${q.slice(0,200)}`);
 }
 
 function esc(s) { return s === null || s === undefined ? 'NULL' : "'" + String(s).replace(/'/g, "''") + "'"; }
