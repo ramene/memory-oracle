@@ -5,9 +5,9 @@
   <key>Label</key><string>com.local.memory-index-watcher</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/node</string>
-    <string>$HOME/.bin/memory-index-build.mjs</string>
-    <string>--watch</string>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>NVM="$HOME/.nvm/versions/node"; L=$(ls -1 "$NVM" 2>/dev/null | sort -V | tail -1); [ -n "$L" ] &amp;&amp; export PATH="$NVM/$L/bin:$PATH"; [ -d /opt/homebrew/bin ] &amp;&amp; export PATH="/opt/homebrew/bin:$PATH"; exec node "$HOME/.bin/memory-index-build.mjs" --watch</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
