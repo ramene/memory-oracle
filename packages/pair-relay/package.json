@@ -1,0 +1,16 @@
+{
+  "name": "@memory-oracle/pair-relay",
+  "version": "0.1.0",
+  "description": "Lean stateless relay for the verum device-pairing handshake — desktop `verum pair-device` ⇄ verum-ios. Fork of encounter-relay without the clinical EBR routes. Task #165 follow-on.",
+  "type": "module",
+  "main": "server.ts",
+  "scripts": {
+    "start": "node --experimental-strip-types server.ts",
+    "test:curl": "bash test/curl-test.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "private": true,
+  "license": "MIT"
+}

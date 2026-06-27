@@ -1,0 +1,25 @@
+# GAE Standard service for the verum pair-relay.
+#
+# manual_scaling: instances: 1 is LOAD-BEARING, not a cost knob: the relay holds
+# pairing state in an in-memory Map, so there must be EXACTLY ONE instance. With
+# autoscaling (even min_instances:1) a second instance could serve a poll that
+# can't see a claim POSTed to the first. manual_scaling pins one always-on
+# instance; store-and-forward then holds within the 15-min TTL window.
+#
+# Routed as relay.verum.sh via dispatch.yaml in the verum.sh repo (see README).
+# Deploy:  gcloud app deploy app.yaml --project=mae-stack-prod
+# NOTE: mae-stack-prod runs a priority-1 DENY-all firewall (scale-to-zero
+# posture). Open it for the pair routes before the online path will work:
+#   gcloud app firewall-rules create 100 --project=mae-stack-prod \
+#     --source-range="*" --action=allow   # (or scope narrower as desired)
+
+runtime: nodejs22
+service: pair-relay
+
+manual_scaling:
+  instances: 1
+
+entrypoint: node --experimental-strip-types server.ts
+
+# The relay imports only sibling files (types.ts) — no node_modules. GAE still
+# runs `npm install` (no deps) then the entrypoint. PORT is injected by GAE.
