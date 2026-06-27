@@ -146,24 +146,63 @@ jsonl_path, summary_path = sys.argv[1], sys.argv[2]
 sid = os.path.basename(jsonl_path)[:-len('.jsonl')]
 project = os.path.basename(os.path.dirname(jsonl_path))
 
+# ── INCREMENTAL STREAMING (2026-06-26 redesign) ──────────────────────────
+# Persistent sidecar at ~/.claude/projects/_runtime/.offsets/<sid>.off tracks:
+#   - last byte_offset processed (seek-resume point)
+#   - cumulative aggregates (msg counts, tool counter, compact/banner lists)
+# Next walker run: seek to byte_offset, process only NEW bytes, merge with
+# loaded state. Reduces per-tick cost from O(session_size) to O(new_bytes).
+# See project_walker_streaming_chunked_redesign_2026_06_26.md for design.
+SIDECAR_VERSION = 1
+OFFSETS_DIR = os.path.expanduser('~/.claude/projects/_runtime/.offsets')
+os.makedirs(OFFSETS_DIR, exist_ok=True)
+sidecar_path = os.path.join(OFFSETS_DIR, f'{sid}.off')
+
+def load_state():
+    if not os.path.exists(sidecar_path):
+        return None
+    try:
+        with open(sidecar_path) as f:
+            return json.loads(f.read())
+    except Exception:
+        return None
+
 # ── extract signals (streaming, never load full content) ──────────────────
 NOISE_PREFIXES = ('<task-notification', '<system-reminder', '<command-name', '[Request interrupted', 'Caveat:')
 COMPACT_MARKER = 'This session is being continued from a previous conversation'
 
-stats = {
-    'total_lines': 0,
-    'msg_user': 0,
-    'msg_assistant': 0,
-    'msg_system': 0,
-    'msg_other': 0,
-    'first_ts': None,
-    'last_ts': None,
-    'compact_markers': [],     # list of (line_no, ts)
-    'banner_emissions': [],    # list of (line_no, ts)
-    'tool_use_counter': collections.Counter(),
-    'recent_user_prompts': [], # last 5 real prompts (text)
-    'parse_errors': 0,
-}
+file_size = os.path.getsize(jsonl_path)
+loaded = load_state()
+# Validate sidecar: same version + offset must not exceed file size (catches
+# truncation / session-replaced cases — start fresh in those scenarios).
+if loaded and loaded.get('version') == SIDECAR_VERSION and loaded.get('byte_offset', 0) <= file_size:
+    stats = {
+        'total_lines': loaded.get('total_lines', 0),
+        'msg_user': loaded.get('msg_user', 0),
+        'msg_assistant': loaded.get('msg_assistant', 0),
+        'msg_system': loaded.get('msg_system', 0),
+        'msg_other': loaded.get('msg_other', 0),
+        'first_ts': loaded.get('first_ts'),
+        'last_ts': loaded.get('last_ts'),
+        # sidecar stores [line, ts] arrays (JSON-native); restore as tuples
+        'compact_markers': [tuple(x) for x in loaded.get('compact_markers', [])],
+        'banner_emissions': [tuple(x) for x in loaded.get('banner_emissions', [])],
+        'tool_use_counter': collections.Counter(loaded.get('tool_use_counter', {})),
+        'recent_user_prompts': list(loaded.get('recent_user_prompts', [])),
+        'parse_errors': loaded.get('parse_errors', 0),
+    }
+    start_offset = loaded.get('byte_offset', 0)
+    start_line_no = loaded.get('total_lines', 0)
+else:
+    stats = {
+        'total_lines': 0, 'msg_user': 0, 'msg_assistant': 0, 'msg_system': 0,
+        'msg_other': 0, 'first_ts': None, 'last_ts': None,
+        'compact_markers': [], 'banner_emissions': [],
+        'tool_use_counter': collections.Counter(), 'recent_user_prompts': [],
+        'parse_errors': 0,
+    }
+    start_offset = 0
+    start_line_no = 0
 
 KEYWORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}")
 STOP = set('the of and to in a for is on it as that this be with by are not or an at if from we i you your our my their his her them they you our'.split())
@@ -181,8 +220,12 @@ def maybe_collect_prompt(text):
     if len(stats['recent_user_prompts']) > 5:
         stats['recent_user_prompts'].pop(0)
 
+# Incremental read — seek to recorded offset, continue line numbering
 with open(jsonl_path, errors='replace') as f:
-    for line_no, line in enumerate(f, start=1):
+    f.seek(start_offset)
+    line_no = start_line_no
+    for line in f:
+        line_no += 1
         stats['total_lines'] = line_no
         line = line.strip()
         if not line:
@@ -241,8 +284,41 @@ with open(jsonl_path, errors='replace') as f:
         else:
             stats['msg_other'] += 1
 
-# ── render summary md ─────────────────────────────────────────────────────
+# ── persist sidecar (the streaming foundation) ────────────────────────────
 size_bytes = os.path.getsize(jsonl_path)
+new_state = {
+    'version': SIDECAR_VERSION,
+    'session_id': sid,
+    'byte_offset': size_bytes,
+    'total_lines': stats['total_lines'],
+    'msg_user': stats['msg_user'],
+    'msg_assistant': stats['msg_assistant'],
+    'msg_system': stats['msg_system'],
+    'msg_other': stats['msg_other'],
+    'first_ts': stats['first_ts'],
+    'last_ts': stats['last_ts'],
+    'compact_markers': [list(x) for x in stats['compact_markers']],
+    'banner_emissions': [list(x) for x in stats['banner_emissions']],
+    'tool_use_counter': dict(stats['tool_use_counter']),
+    'recent_user_prompts': stats['recent_user_prompts'],
+    'parse_errors': stats['parse_errors'],
+    'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+}
+fd, tmp = tempfile.mkstemp(dir=OFFSETS_DIR, prefix='.tmp-off-')
+try:
+    with os.fdopen(fd, 'w') as wf:
+        json.dump(new_state, wf)
+    os.replace(tmp, sidecar_path)
+except Exception:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+    raise
+
+# Visibility line (stderr — observable in cron log without polluting stdout)
+processed_bytes = size_bytes - start_offset
+sys.stderr.write(f'[walker] sid={sid[:8]} processed={processed_bytes} bytes (offset {start_offset} → {size_bytes}); cumulative lines={stats["total_lines"]}\n')
+
+# ── render summary md ─────────────────────────────────────────────────────
 def human(b):
     if b > 1073741824: return f"{b/1073741824:.2f} GB"
     if b > 1048576:    return f"{b/1048576:.1f} MB"
