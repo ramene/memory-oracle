@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# substrate-search — single-call search across ALL substrate sources.
+#
+# Why this exists (the discipline-enforcement mechanism):
+# memory-search.mjs only hits the BM25 index (memory cards + digests + chunks).
+# Calling memory-search alone and then claiming "searched the substrate" is
+# epistemically wrong — TWO whole substrate sources go untouched:
+#   1. Raw session JSONLs (~/.claude/projects/*/<sid>.jsonl)
+#   2. Raw tmux-logs (~/.local/share/tmux-logs/)
+#
+# This wrapper fans out across all three and reports per-source hit counts.
+# Sources with 0 hits are LISTED EXPLICITLY (not silently skipped) so the
+# caller — and the operator reading tmux-logs of the caller — can verify
+# all sources were actually queried.
+#
+# Earned 2026-06-27 after months of repeated substrate-discipline failures
+# where the agent (me) defaulted to memory-search and missed verbatim
+# context that lived in tmux-logs. See feedback_substrate_search_discipline.md.
+#
+# Usage:
+#   substrate-search "<query>"                       # default — last 30 days of tmux-logs
+#   substrate-search "<query>" --all                 # full tmux-logs range (~8 GB, slow)
+#   substrate-search "<query>" --project <name>      # narrow JSONL scope to a project
+#   substrate-search "<query>" --days N              # tmux-logs last N days (default 30)
+#   substrate-search "<query>" --excerpt-bytes N     # excerpt length per hit (default 120)
+#   substrate-search --help
+
+set -u
+
+# Colors
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+GREEN=$'\033[32m'
+YELLOW=$'\033[33m'
+RED=$'\033[31m'
+RESET=$'\033[0m'
+
+show_help() {
+  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+}
+
+QUERY=""
+ALL=0
+PROJECT=""
+DAYS=7
+EXCERPT_BYTES=120
+SKIP_TMUX_LOGS=0  # 2026-06-27: tmux-logs raw grep is the 8 GB bottleneck
+                  # until #17 chunks them into BM25. Default to SKIP for speed.
+                  # Use --tmux-logs or --all to opt in.
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) show_help ;;
+    --all) ALL=1; SKIP_TMUX_LOGS=0 ;;
+    --tmux-logs) SKIP_TMUX_LOGS=0 ;;
+    --no-tmux-logs) SKIP_TMUX_LOGS=1 ;;
+    --project) shift; PROJECT="$1" ;;
+    --days) shift; DAYS="$1" ;;
+    --excerpt-bytes) shift; EXCERPT_BYTES="$1" ;;
+    -*) echo "unknown flag: $1" >&2; exit 2 ;;
+    *) if [ -z "$QUERY" ]; then QUERY="$1"; else QUERY="$QUERY $1"; fi ;;
+  esac
+  shift
+done
+
+# Auto-skip tmux-logs unless explicitly opted in via --all or --tmux-logs
+# (#17 — extend chunking to tmux-logs — will eliminate the need for this flag)
+if [ "$ALL" -eq 0 ] && [ -z "${EXPLICIT_TMUX:-}" ]; then
+  case " $* $0 " in
+    *" --tmux-logs "*|*" --all "*) SKIP_TMUX_LOGS=0 ;;
+    *) SKIP_TMUX_LOGS=1 ;;
+  esac
+fi
+
+[ -z "$QUERY" ] && { echo "usage: substrate-search \"<query>\" [--all] [--project <name>] [--days N]" >&2; exit 2; }
+
+PROJECTS_ROOT="${HOME}/.claude/projects"
+TMUX_LOGS_ROOT="${HOME}/.local/share/tmux-logs"
+
+# ─── SOURCE 1: memory-search BM25 ─────────────────────────────────────────
+printf "%s──── memory-search (BM25 over cards + digests + chunks) ────%s\n" "$BOLD" "$RESET"
+if [ -x "${HOME}/.bin/memory-search.mjs" ]; then
+  BM25_OUT=$("${HOME}/.bin/memory-search.mjs" "$QUERY" 2>/dev/null)
+  # Extract hit count from the standard "Returned N/M hits" header line
+  BM25_COUNT=$(echo "$BM25_OUT" | grep -oE 'Returned [0-9]+/[0-9]+ hits' | head -1 | awk '{print $2}' | cut -d'/' -f1)
+  BM25_COUNT="${BM25_COUNT:-0}"
+  if [ "$BM25_COUNT" -gt 0 ]; then
+    printf "%s[BM25 hits: %d]%s\n" "$GREEN" "$BM25_COUNT" "$RESET"
+    # Show hit names from "## project/file" lines
+    echo "$BM25_OUT" | grep -E '^## ' | head -10 | sed 's/^## /  /'
+  else
+    printf "%s[BM25 hits: 0]%s %s(no cards/digests/chunks matched)%s\n" "$YELLOW" "$RESET" "$DIM" "$RESET"
+  fi
+else
+  printf "%s[BM25 hits: SKIPPED — memory-search.mjs missing]%s\n" "$RED" "$RESET"
+fi
+echo
+
+# ─── SOURCE 2: session JSONLs (parallel grep) ──────────────────────────────
+printf "%s──── session JSONLs (raw grep over ~/.claude/projects) ────%s\n" "$BOLD" "$RESET"
+if [ -n "$PROJECT" ]; then
+  JSONL_DATA=$(find "$PROJECTS_ROOT" -maxdepth 2 -name "*.jsonl" -path "*${PROJECT}*" -type f -print0 2>/dev/null | \
+    xargs -0 -P 8 grep -c -H -i -F "$QUERY" 2>/dev/null | awk -F: '$NF+0 > 0')
+else
+  JSONL_DATA=$(find "$PROJECTS_ROOT" -maxdepth 2 -name "*.jsonl" -type f -print0 2>/dev/null | \
+    xargs -0 -P 8 grep -c -H -i -F "$QUERY" 2>/dev/null | awk -F: '$NF+0 > 0')
+fi
+JSONL_HITS_TOTAL=$(echo "$JSONL_DATA" | awk -F: '{sum += $NF} END {print sum+0}')
+JSONL_FILES_HIT=$(echo "$JSONL_DATA" | grep -c .)
+# Build readable display lines  filename:count → "proj/sid  N hits"
+JSONL_HITS_LINES=$(echo "$JSONL_DATA" | head -10 | awk -F: '{
+  count=$NF;
+  path=$1;
+  n=split(path, parts, "/");
+  proj=parts[n-1]; file=parts[n];
+  sub(/\.jsonl$/, "", file); sid=substr(file, 1, 8);
+  printf "  %s/%s  %d hits\n", proj, sid, count
+}')
+
+if [ "$JSONL_HITS_TOTAL" -gt 0 ]; then
+  printf "%s[JSONL hits: %d across %d sessions]%s\n" "$GREEN" "$JSONL_HITS_TOTAL" "$JSONL_FILES_HIT" "$RESET"
+  echo "$JSONL_HITS_LINES"
+else
+  printf "%s[JSONL hits: 0]%s %s(no transcript content matched)%s\n" "$YELLOW" "$RESET" "$DIM" "$RESET"
+fi
+echo
+
+# ─── SOURCE 3: tmux-logs (parallel grep with date filter) ────────────────
+printf "%s──── tmux-logs (raw grep over ~/.local/share/tmux-logs) ────%s\n" "$BOLD" "$RESET"
+if [ "$SKIP_TMUX_LOGS" -eq 1 ]; then
+  printf "%s[tmux-logs hits: SKIPPED — use --tmux-logs or --all to scan (8 GB raw grep, slow until #17 chunks them)]%s\n" "$DIM" "$RESET"
+  TMUX_HITS_TOTAL=0
+  RANGE_LABEL="skipped"
+elif [ -d "$TMUX_LOGS_ROOT" ]; then
+  if [ "$ALL" -eq 1 ]; then
+    RANGE_LABEL="ALL"
+    TMUX_DATA=$(find "$TMUX_LOGS_ROOT" -name "*.log" -type f -print0 2>/dev/null | \
+      xargs -0 -P 8 grep -c -H -i -F "$QUERY" 2>/dev/null | awk -F: '$NF+0 > 0')
+  else
+    RANGE_LABEL="last ${DAYS}d"
+    TMUX_DATA=$(find "$TMUX_LOGS_ROOT" -name "*.log" -type f -mtime -${DAYS} -print0 2>/dev/null | \
+      xargs -0 -P 8 grep -c -H -i -F "$QUERY" 2>/dev/null | awk -F: '$NF+0 > 0')
+  fi
+  TMUX_HITS_TOTAL=$(echo "$TMUX_DATA" | awk -F: '{sum += $NF} END {print sum+0}')
+  TMUX_FILES_HIT=$(echo "$TMUX_DATA" | grep -c .)
+  TMUX_HIT_LINES=$(echo "$TMUX_DATA" | head -10 | awk -F: -v base="${TMUX_LOGS_ROOT}/" '{
+    count=$NF;
+    path=$1;
+    sub(base, "", path);
+    printf "  %s  %d hits\n", path, count
+  }')
+
+  if [ "$TMUX_HITS_TOTAL" -gt 0 ]; then
+    printf "%s[tmux-logs hits: %d across %d files (%s)]%s\n" "$GREEN" "$TMUX_HITS_TOTAL" "$TMUX_FILES_HIT" "$RANGE_LABEL" "$RESET"
+    echo "$TMUX_HIT_LINES"
+  else
+    printf "%s[tmux-logs hits: 0 (%s)]%s %s%s%s\n" \
+      "$YELLOW" "$RANGE_LABEL" "$RESET" "$DIM" \
+      "$([ "$ALL" -eq 0 ] && echo "(try --all for full range)" || echo "(no terminal capture matched)")" \
+      "$RESET"
+  fi
+else
+  printf "%s[tmux-logs hits: SKIPPED — %s not present]%s\n" "$RED" "$TMUX_LOGS_ROOT" "$RESET"
+  TMUX_HITS_TOTAL=0
+fi
+echo
+
+# ─── SUMMARY ──────────────────────────────────────────────────────────────
+TOTAL=$((BM25_COUNT + JSONL_HITS_TOTAL + TMUX_HITS_TOTAL))
+printf "%s──── SUMMARY ────%s\n" "$BOLD" "$RESET"
+printf "  BM25:       %3d hits\n" "$BM25_COUNT"
+printf "  JSONLs:     %3d hits\n" "$JSONL_HITS_TOTAL"
+printf "  tmux-logs:  %3d hits (%s)\n" "$TMUX_HITS_TOTAL" "$RANGE_LABEL"
+printf "  %sTOTAL:      %3d hits across 3 substrate sources%s\n" "$BOLD" "$TOTAL" "$RESET"
+if [ "$TOTAL" -eq 0 ]; then
+  printf "  %sNO HITS in any source. Either query is too narrow, or the substrate genuinely lacks this content.%s\n" "$YELLOW" "$RESET"
+fi
