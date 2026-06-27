@@ -37,6 +37,34 @@ PROJECTS_ROOT="${HOME}/.claude/projects"
 OUT_DIR="${HOME}/.claude/projects/_runtime/memory"
 MIN_RESUMMARIZE_SECS="${MIN_RESUMMARIZE_SECS:-300}"
 
+# ─── pile-up guard (2026-06-26 incident) ────────────────────────────────────
+# Before this guard, the */5 cron could fire a new walker while the previous
+# was still processing an 8+ MB live session JSONL. Multiple concurrent
+# walkers each spawned memory-index-build.mjs children that piled up to
+# load avg 749. Lock guarantees AT MOST ONE walker runs at a time.
+# mkdir-atomic, same pattern as vault-write-tx.sh.
+LOCK_DIR="${HOME}/.claude-tmp/walker-current.lock"
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo $$ > "$LOCK_DIR/pid"
+  trap 'rm -rf "$LOCK_DIR"' EXIT
+else
+  # Lock exists — check if holder is alive
+  if [ -f "$LOCK_DIR/pid" ]; then
+    HOLDER_PID=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo "")
+    if [ -n "$HOLDER_PID" ] && kill -0 "$HOLDER_PID" 2>/dev/null; then
+      # Holder is alive — skip cleanly (cron will retry next tick)
+      echo "[$(date -u +%FT%TZ)] walker skip: pid=$HOLDER_PID still running" >&2
+      exit 0
+    fi
+  fi
+  # Stale lock (holder dead or no pid file) — steal it
+  rm -rf "$LOCK_DIR"
+  mkdir "$LOCK_DIR" 2>/dev/null
+  echo $$ > "$LOCK_DIR/pid"
+  trap 'rm -rf "$LOCK_DIR"' EXIT
+  echo "[$(date -u +%FT%TZ)] walker stole stale lock" >&2
+fi
+
 # Args
 FORCE=0
 DRY=0
