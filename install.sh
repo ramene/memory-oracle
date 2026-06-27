@@ -45,7 +45,7 @@ done
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
 for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh repo-write-tx.sh \
          vault-submod-push.sh substrate-health.sh substrate-search \
-         walk-session-jsonl-nightly.sh \
+         walk-session-jsonl-nightly.sh walk-tmux-logs-nightly.sh \
          git-remote-verum \
          mae-pulse-daemon.mjs mae-pulse-status.mjs verum-vrm3.mjs \
          claude-hook-substrate-guard.mjs \
@@ -276,7 +276,7 @@ BRAIN_MARK="# memory-oracle:brain-sync"
 HYGIENE_MARK="# memory-oracle:memory-hygiene-audit"
 WALKER_MARK="# memory-oracle:walker-current"
 VAULT_LINE="*/3 * * * * \$HOME/.bin/vault-autosync.sh >> \$HOME/.claude-tmp/vault-autosync.log 2>&1 $VAULT_MARK"
-WALKER_LINE="*/5 * * * * \$HOME/.bin/walk-session-jsonl-nightly.sh --current >> \$HOME/.claude-tmp/walk-session-jsonl-nightly.log 2>&1 $WALKER_MARK"
+WALKER_LINE="*/5 * * * * \$HOME/.bin/walk-session-jsonl-nightly.sh walk-tmux-logs-nightly.sh --current >> \$HOME/.claude-tmp/walk-session-jsonl-nightly.log 2>&1 $WALKER_MARK"
 HYGIENE_LINE="0 10 * * * \$HOME/.bin/memory-hygiene-audit.mjs >> \$HOME/.claude-tmp/memory-hygiene-audit.log 2>&1 $HYGIENE_MARK"
 
 case "$HOST_MESH" in
