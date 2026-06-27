@@ -44,7 +44,7 @@ done
 # export/import/merge/pubkey tools. Installing these here makes ./install.sh the
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
 for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh repo-write-tx.sh \
-         vault-submod-push.sh substrate-health.sh \
+         vault-submod-push.sh substrate-health.sh substrate-search \
          walk-session-jsonl-nightly.sh \
          git-remote-verum \
          mae-pulse-daemon.mjs mae-pulse-status.mjs verum-vrm3.mjs \
