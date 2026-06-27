@@ -74,7 +74,11 @@ function sql(query, opts = {}) {
   // failures observed during multi-session bursts.
   const args = [DB_PATH];
   if (opts.json) args.unshift('-json');
-  const prefixedQuery = `.timeout 5000\n${query}`;
+  // trusted_schema=ON re-enables schema-defined triggers that write to the memory_fts
+  // virtual table (the external-content FTS5 sync triggers). macOS sqlite3 ships with
+  // trusted_schema OFF by default, which otherwise raises "unsafe use of virtual table".
+  // Set before any query in the batch so subsequent statements prepare with it on.
+  const prefixedQuery = `.timeout 5000\nPRAGMA trusted_schema=ON;\n${query}`;
   const r = spawnSync('sqlite3', args, { input: prefixedQuery, encoding: 'utf8', maxBuffer: 100 * 1024 * 1024 });
   if (r.status !== 0) {
     throw new Error(`sqlite3 failed (status ${r.status}): ${r.stderr}\nquery: ${query.slice(0,200)}`);
@@ -121,6 +125,39 @@ function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS supersession_memory_idx ON supersession(memory_id);
     CREATE TABLE IF NOT EXISTS index_meta (key TEXT PRIMARY KEY, value TEXT);
+  `);
+  ensureSessionSchema();
+}
+
+// Phase 2 (mae-ADR-001, 2026-06-26): incremental BM25 for streaming session chunks.
+// Adds (a) additive columns on the content table — NOT in the FTS virtual table, so no
+// destructive FTS rebuild/migration; session/chunk citation is derivable from project+file —
+// and (b) external-content FTS5 sync triggers that replace the per-fs-event full 'rebuild'
+// with O(1) incremental maintenance for ALL upserts (cards, digests, AND session chunks).
+function ensureSessionSchema() {
+  const cols = sql(`PRAGMA table_info(memory_file);`, { json: true }).map(c => c.name);
+  const adds = [];
+  if (!cols.includes('session_id')) adds.push(`ALTER TABLE memory_file ADD COLUMN session_id TEXT;`);
+  if (!cols.includes('chunk_id'))   adds.push(`ALTER TABLE memory_file ADD COLUMN chunk_id INTEGER;`);
+  if (!cols.includes('frozen'))     adds.push(`ALTER TABLE memory_file ADD COLUMN frozen INTEGER DEFAULT 0;`);
+  if (adds.length) sql(adds.join('\n'));
+  // Triggers reference only the four INDEXED FTS columns; UNINDEXED columns
+  // (type, project, file) produce no tokens and are read from the content table on demand.
+  sql(`
+    CREATE TRIGGER IF NOT EXISTS memory_file_ai AFTER INSERT ON memory_file BEGIN
+      INSERT INTO memory_fts(rowid, name, description, body, merged_body)
+      VALUES (new.id, new.name, new.description, new.body, new.merged_body);
+    END;
+    CREATE TRIGGER IF NOT EXISTS memory_file_ad AFTER DELETE ON memory_file BEGIN
+      INSERT INTO memory_fts(memory_fts, rowid, name, description, body, merged_body)
+      VALUES ('delete', old.id, old.name, old.description, old.body, old.merged_body);
+    END;
+    CREATE TRIGGER IF NOT EXISTS memory_file_au AFTER UPDATE ON memory_file BEGIN
+      INSERT INTO memory_fts(memory_fts, rowid, name, description, body, merged_body)
+      VALUES ('delete', old.id, old.name, old.description, old.body, old.merged_body);
+      INSERT INTO memory_fts(rowid, name, description, body, merged_body)
+      VALUES (new.id, new.name, new.description, new.body, new.merged_body);
+    END;
   `);
 }
 
@@ -172,6 +209,81 @@ function listDigestFiles() {
     }
   } catch {}
   return out;
+}
+
+// Phase 2: list streaming session chunks emitted by the walker (Phase 1.5).
+// Layout: $CLAUDE_PROJECTS_ROOT/_runtime/memory/sessions/<sid>/chunk-NNN.md (+ HEAD.md).
+// Synthetic project '_sessions' (parallel to '_digests'). HEAD.md is NOT listed/indexed —
+// it is a convenience index; the chunk's own frontmatter `frozen` field is authoritative.
+// `.tmp-*` files (walker's mkstemp staging) are excluded via the startsWith('.') guard.
+const SESSIONS_ROOT = join(PROJECTS_ROOT, '_runtime', 'memory', 'sessions');
+function listSessionChunks() {
+  const out = [];
+  if (!existsSync(SESSIONS_ROOT)) return out;
+  let sids;
+  try { sids = readdirSync(SESSIONS_ROOT); } catch { return out; }
+  for (const sid of sids) {
+    if (sid.startsWith('.')) continue;
+    const sdir = join(SESSIONS_ROOT, sid);
+    let files;
+    try { files = readdirSync(sdir); } catch { continue; }
+    for (const f of files) {
+      if (f.startsWith('.')) continue;            // skip .tmp-* mid-write staging files
+      if (!/^chunk-\d+\.md$/.test(f)) continue;   // chunk files only; HEAD.md excluded
+      out.push({ project: '_sessions', file: `${sid}/${f}`, path: join(sdir, f), isChunk: true, session_id: sid });
+    }
+  }
+  return out;
+}
+
+// Parse the nested YAML frontmatter the walker writes on each chunk. parseFrontmatter()
+// only handles flat top-level keys; chunk metadata lives under an indented `metadata:` block.
+function parseChunkMeta(text) {
+  const meta = { name: '', description: '', session_id: null, chunk_id: null, frozen: false };
+  const m = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return meta;
+  const fm = m[1];
+  const unquote = s => (s == null ? '' : s.replace(/^["']|["']$/g, ''));
+  const grab = re => { const x = fm.match(re); return x ? x[1].trim() : null; };
+  meta.name = unquote(grab(/^name:\s*(.*)$/m)) || '';
+  meta.description = unquote(grab(/^description:\s*(.*)$/m)) || '';
+  meta.session_id = unquote(grab(/^\s*session_id:\s*(.*)$/m));
+  const cid = grab(/^\s*chunk_id:\s*(\d+)/m);
+  meta.chunk_id = cid != null ? parseInt(cid, 10) : null;
+  meta.frozen = /^\s*frozen:\s*true\b/mi.test(fm);
+  return meta;
+}
+
+// Phase 2 core: index one session chunk. Frozen chunks are immutable — indexed exactly
+// once, then a constant-time fast-path skip (no file read, no hash). The current chunk
+// (frozen=false) REPLACEs its single row on each write. FTS is maintained by the sync
+// triggers (ensureSessionSchema) — no full 'rebuild' is ever triggered here.
+function upsertChunk(rec) {
+  const existing = sql(`SELECT id, sha256, frozen FROM memory_file WHERE project='_sessions' AND file=${esc(rec.file)};`, { json: true });
+  // FAST PATH: an already-indexed frozen chunk is immutable — never re-read or re-index.
+  if (existing.length && existing[0].frozen === 1) return { id: existing[0].id, action: 'skip-frozen' };
+
+  const original = readFileSync(rec.path, 'utf8');
+  const meta = parseChunkMeta(original);
+  const { body } = parseFrontmatter(original);
+  const frozen = meta.frozen ? 1 : 0;
+  const mtime = statSync(rec.path).mtimeMs;
+  const hash = sha256(original);
+  if (existing.length && existing[0].sha256 === hash) {
+    // Content unchanged but the chunk may have just been promoted to frozen — record it
+    // so the fast-path engages next time.
+    if (frozen && existing[0].frozen !== 1) sql(`UPDATE memory_file SET frozen=1 WHERE id=${existing[0].id};`);
+    return { id: existing[0].id, action: 'unchanged' };
+  }
+  const name = meta.name || `session ${rec.session_id} ${basename(rec.file)}`;
+  const desc = meta.description || '';
+  const cid = meta.chunk_id != null ? meta.chunk_id : 'NULL';
+  if (existing.length) {
+    sql(`UPDATE memory_file SET type='session-chunk', name=${esc(name)}, description=${esc(desc)}, body=${esc(body)}, merged_body=${esc(body)}, has_supersessions=0, mtime=${mtime}, sha256=${esc(hash)}, session_id=${esc(rec.session_id)}, chunk_id=${cid}, frozen=${frozen} WHERE id=${existing[0].id};`);
+    return { id: existing[0].id, action: 'updated' };
+  }
+  const out = sql(`INSERT INTO memory_file (project, file, type, name, description, body, merged_body, has_supersessions, mtime, sha256, session_id, chunk_id, frozen) VALUES ('_sessions', ${esc(rec.file)}, 'session-chunk', ${esc(name)}, ${esc(desc)}, ${esc(body)}, ${esc(body)}, 0, ${mtime}, ${esc(hash)}, ${esc(rec.session_id)}, ${cid}, ${frozen}); SELECT last_insert_rowid() AS id;`, { json: true });
+  return { id: out[0]?.id, action: 'inserted' };
 }
 
 function getMerged(filePath) {
@@ -246,19 +358,21 @@ function buildAll() {
   initSchema();
   const memFiles = listMemoryFiles();
   const digestFiles = listDigestFiles();
-  const files = [...memFiles, ...digestFiles];
-  let stats = { unchanged: 0, inserted: 0, updated: 0 };
+  const chunkFiles = listSessionChunks();
+  const files = [...memFiles, ...digestFiles, ...chunkFiles];
+  let stats = { unchanged: 0, inserted: 0, updated: 0, 'skip-frozen': 0 };
   for (const f of files) {
     try {
-      const r = upsertFile(f);
+      const r = f.isChunk ? upsertChunk(f) : upsertFile(f);
       stats[r.action] = (stats[r.action] || 0) + 1;
     } catch (e) {
       console.error(`[index] FAIL ${f.path}: ${e.message}`);
     }
   }
+  // Full rebuild remains the authoritative safety net for the daily 03:30 cron path.
   rebuildFts();
-  sql(`INSERT OR REPLACE INTO index_meta (key, value) VALUES ('last_full_build', '${new Date().toISOString()}'), ('file_count', '${files.length}'), ('memory_count', '${memFiles.length}'), ('digest_count', '${digestFiles.length}');`);
-  console.log(`[index] ${files.length} files (${memFiles.length} memory + ${digestFiles.length} digests): ${stats.inserted || 0} inserted, ${stats.updated || 0} updated, ${stats.unchanged || 0} unchanged`);
+  sql(`INSERT OR REPLACE INTO index_meta (key, value) VALUES ('last_full_build', '${new Date().toISOString()}'), ('file_count', '${files.length}'), ('memory_count', '${memFiles.length}'), ('digest_count', '${digestFiles.length}'), ('session_chunk_count', '${chunkFiles.length}');`);
+  console.log(`[index] ${files.length} files (${memFiles.length} memory + ${digestFiles.length} digests + ${chunkFiles.length} session-chunks): ${stats.inserted || 0} inserted, ${stats.updated || 0} updated, ${stats.unchanged || 0} unchanged, ${stats['skip-frozen'] || 0} skip-frozen`);
   return stats;
 }
 
@@ -281,8 +395,8 @@ function watchMode() {
       try {
         const r = upsertFile({ project: proj, file: baseFile, path: fullPath });
         if (r.action !== 'unchanged') {
+          // FTS is maintained incrementally by the sync triggers — no full rebuild.
           console.log(`[index] ${r.action}: ${proj}/${baseFile}`);
-          rebuildFts();
         }
       } catch (e) { console.error(`[index] watch upsert failed for ${fullPath}: ${e.message}`); }
     });
@@ -297,10 +411,35 @@ function watchMode() {
       try {
         const r = upsertFile({ project: '_digests', file: fname, path: fullPath, isDigest: true });
         if (r.action !== 'unchanged') {
+          // FTS maintained incrementally by sync triggers — no full rebuild.
           console.log(`[index] ${r.action}: _digests/${fname}`);
-          rebuildFts();
         }
       } catch (e) { console.error(`[index] watch upsert failed for ${fullPath}: ${e.message}`); }
+    });
+    watchers.push(w);
+  }
+  // Phase 2: watch the streaming session-chunk tree (recursive — sessions/<sid>/chunk-NNN.md).
+  // We watch the '_runtime' root so newly-created session dirs are caught without a restart.
+  // HEAD.md and .tmp-* staging files are ignored; only chunk-NNN.md events upsert.
+  const runtimeRoot = join(PROJECTS_ROOT, '_runtime');
+  if (existsSync(runtimeRoot)) {
+    const w = watch(runtimeRoot, { recursive: true }, (event, fname) => {
+      if (!fname) return;
+      const parts = fname.split('/');
+      const base = parts[parts.length - 1];
+      if (!base || base.startsWith('.')) return;            // skip .tmp-* staging files
+      if (!/^chunk-\d+\.md$/.test(base)) return;            // chunk files only; HEAD.md excluded
+      const sIdx = parts.indexOf('sessions');
+      if (sIdx < 0 || !parts[sIdx + 1]) return;
+      const sid = parts[sIdx + 1];
+      const fullPath = join(runtimeRoot, fname);
+      if (!existsSync(fullPath)) return;
+      try {
+        const r = upsertChunk({ project: '_sessions', file: `${sid}/${base}`, path: fullPath, session_id: sid });
+        if (r.action !== 'unchanged' && r.action !== 'skip-frozen') {
+          console.log(`[index] ${r.action}: _sessions/${sid}/${base}`);
+        }
+      } catch (e) { console.error(`[index] watch chunk upsert failed for ${fullPath}: ${e.message}`); }
     });
     watchers.push(w);
   }
