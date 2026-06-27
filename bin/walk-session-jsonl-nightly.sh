@@ -220,14 +220,163 @@ def maybe_collect_prompt(text):
     if len(stats['recent_user_prompts']) > 5:
         stats['recent_user_prompts'].pop(0)
 
-# Incremental read — seek to recorded offset, continue line numbering
+# ── Phase 1.5: chunked chronicle storage ──────────────────────────────────
+# Each chunk holds 1000 lines (or 5 MB, whichever rolls first). Frozen chunks
+# are immutable after rollover. Current chunk grows each tick. HEAD.md indexes
+# all chunks. Format contract documented in answers to sequoia Q1-Q4.
+CHUNK_LINES = 1000
+CHUNK_BYTES = 5 * 1024 * 1024
+SESSIONS_DIR = os.path.expanduser('~/.claude/projects/_runtime/memory/sessions')
+session_dir = os.path.join(SESSIONS_DIR, sid)
+os.makedirs(session_dir, exist_ok=True)
+
+def chunk_id_for_line(n):
+    return (n - 1) // CHUNK_LINES + 1
+
+def fresh_chunk_stats(cid, start_line, start_byte):
+    return {
+        'chunk_id': cid,
+        'session_id': sid,
+        'line_start': start_line,
+        'line_end': start_line,
+        'byte_start': start_byte,
+        'byte_end': start_byte,
+        'msg_user': 0, 'msg_assistant': 0, 'msg_system': 0, 'msg_other': 0,
+        'first_ts': None, 'last_ts': None,
+        'compact_markers': [],
+        'banner_emissions': [],
+        'tool_use_counter': collections.Counter(),
+        'recent_user_prompts': [],
+    }
+
+def write_chunk_atomic(chunk_data, frozen):
+    cid = chunk_data['chunk_id']
+    chunk_path = os.path.join(session_dir, f'chunk-{cid:03d}.md')
+    # chunk-local keyword bag from prompts in this chunk
+    kw_seen_chunk = []
+    for p in chunk_data['recent_user_prompts']:
+        for w in KEYWORD_RE.findall(p):
+            wl = w.lower()
+            if wl in STOP or len(wl) < 3:
+                continue
+            if wl not in kw_seen_chunk:
+                kw_seen_chunk.append(wl)
+    chunk_kw_bag = ' '.join(kw_seen_chunk[:30])
+    top_tools_chunk = chunk_data['tool_use_counter'].most_common(10)
+    chunk_now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    msg_total = chunk_data['msg_user'] + chunk_data['msg_assistant'] + chunk_data['msg_system'] + chunk_data['msg_other']
+    body = f"""---
+name: session {sid[:8]} chunk {cid:03d} (lines {chunk_data['line_start']}-{chunk_data['line_end']})
+description: Chunk-local signal summary. {chunk_data['msg_user']} user msgs / {chunk_data['msg_assistant']} assistant msgs / {chunk_data['msg_system']} sys / {chunk_data['msg_other']} other within lines {chunk_data['line_start']}-{chunk_data['line_end']}. {'frozen' if frozen else 'CURRENT (growing)'}.
+metadata:
+  type: reference
+  session_id: {sid}
+  chunk_id: {cid}
+  lines: [{chunk_data['line_start']}, {chunk_data['line_end']}]
+  bytes: [{chunk_data['byte_start']}, {chunk_data['byte_end']}]
+  frozen: {str(frozen).lower()}
+  mtime: {chunk_now}
+---
+
+# Session {sid[:8]} chunk {cid:03d} (lines {chunk_data['line_start']}-{chunk_data['line_end']})
+
+| Field | Value |
+|---|---|
+| chunk_id | {cid:03d} |
+| session_id | `{sid}` |
+| lines | {chunk_data['line_start']}-{chunk_data['line_end']} ({chunk_data['line_end'] - chunk_data['line_start'] + 1} lines) |
+| bytes | {chunk_data['byte_start']}-{chunk_data['byte_end']} |
+| frozen | {frozen} |
+| first ts | {chunk_data['first_ts'] or '(none)'} |
+| last ts | {chunk_data['last_ts'] or '(none)'} |
+| msg breakdown | user={chunk_data['msg_user']} asst={chunk_data['msg_assistant']} sys={chunk_data['msg_system']} other={chunk_data['msg_other']} |
+| compact markers | {len(chunk_data['compact_markers'])} |
+| banner emissions | {len(chunk_data['banner_emissions'])} |
+
+## Top tools in this chunk
+{chr(10).join(f"  - `{n}`: {c:,}" for n, c in top_tools_chunk) or '  (no tool_use messages)'}
+
+## Recent user prompts in this chunk (keyword bag)
+{chunk_kw_bag or '(no qualifying prompts in this chunk)'}
+
+## Compact markers in this chunk
+{chr(10).join(f"  - line {ln} ({ts})" for ln, ts in chunk_data['compact_markers'][-10:]) or '  (none)'}
+
+## Banner emissions in this chunk
+{chr(10).join(f"  - line {ln} ({ts})" for ln, ts in chunk_data['banner_emissions'][-10:]) or '  (none)'}
+
+---
+_Auto-generated {chunk_now} by walk-session-jsonl-nightly.sh chunk emit. Status: {'frozen (immutable)' if frozen else 'CURRENT (will be rewritten on next walker tick)'}._
+"""
+    fd, tmp = tempfile.mkstemp(dir=session_dir, prefix='.tmp-chunk-')
+    try:
+        with os.fdopen(fd, 'w') as wf:
+            wf.write(body)
+        os.replace(tmp, chunk_path)
+    except Exception:
+        if os.path.exists(tmp): os.unlink(tmp)
+        raise
+
+# Restore or initialize current chunk accumulator from sidecar
+if loaded and loaded.get('current_chunk') and loaded.get('version') == SIDECAR_VERSION:
+    cc = loaded['current_chunk']
+    current_chunk = {
+        'chunk_id': cc['chunk_id'],
+        'session_id': sid,
+        'line_start': cc['line_start'],
+        'line_end': cc['line_end'],
+        'byte_start': cc['byte_start'],
+        'byte_end': cc['byte_end'],
+        'msg_user': cc.get('msg_user', 0),
+        'msg_assistant': cc.get('msg_assistant', 0),
+        'msg_system': cc.get('msg_system', 0),
+        'msg_other': cc.get('msg_other', 0),
+        'first_ts': cc.get('first_ts'),
+        'last_ts': cc.get('last_ts'),
+        'compact_markers': [tuple(x) for x in cc.get('compact_markers', [])],
+        'banner_emissions': [tuple(x) for x in cc.get('banner_emissions', [])],
+        'tool_use_counter': collections.Counter(cc.get('tool_use_counter', {})),
+        'recent_user_prompts': list(cc.get('recent_user_prompts', [])),
+    }
+else:
+    initial_cid = chunk_id_for_line(start_line_no + 1) if start_line_no >= 0 else 1
+    current_chunk = fresh_chunk_stats(initial_cid, max(1, start_line_no + 1), start_offset)
+
+def maybe_collect_chunk_prompt(text):
+    t = (text or '').strip()
+    if not t or len(t) < 20: return
+    if any(t.startswith(n) for n in NOISE_PREFIXES): return
+    if t.startswith(COMPACT_MARKER): return
+    current_chunk['recent_user_prompts'].append(t)
+    if len(current_chunk['recent_user_prompts']) > 5:
+        current_chunk['recent_user_prompts'].pop(0)
+
+# Incremental read with chunk-boundary detection
 with open(jsonl_path, errors='replace') as f:
     f.seek(start_offset)
     line_no = start_line_no
-    for line in f:
+    while True:
+        pre = f.tell()
+        raw = f.readline()
+        if not raw:
+            break
         line_no += 1
+        post = f.tell()
         stats['total_lines'] = line_no
-        line = line.strip()
+
+        # Chunk boundary check — finalize previous chunk if line crossed
+        line_cid = chunk_id_for_line(line_no)
+        if line_cid != current_chunk['chunk_id']:
+            # Write previous chunk as FROZEN
+            write_chunk_atomic(current_chunk, frozen=True)
+            # Open new chunk
+            current_chunk = fresh_chunk_stats(line_cid, line_no, pre)
+
+        # Update chunk byte/line extent
+        current_chunk['line_end'] = line_no
+        current_chunk['byte_end'] = post - 1
+
+        line = raw.strip()
         if not line:
             continue
         try:
@@ -238,54 +387,147 @@ with open(jsonl_path, errors='replace') as f:
 
         ts = d.get('timestamp', '')
         if ts:
-            if stats['first_ts'] is None:
-                stats['first_ts'] = ts
+            if stats['first_ts'] is None: stats['first_ts'] = ts
             stats['last_ts'] = ts
+            if current_chunk['first_ts'] is None: current_chunk['first_ts'] = ts
+            current_chunk['last_ts'] = ts
 
         t = d.get('type', 'other')
         msg = d.get('message', {}) if isinstance(d.get('message'), dict) else {}
-        role = msg.get('role', '')
         content = msg.get('content', '')
 
         if t == 'user':
             stats['msg_user'] += 1
+            current_chunk['msg_user'] += 1
             text = ''
             if isinstance(content, str):
                 text = content
             elif isinstance(content, list):
                 for c in content:
                     if isinstance(c, dict) and c.get('type') == 'text':
-                        text = c.get('text', '')
-                        break
+                        text = c.get('text', ''); break
             if text.startswith(COMPACT_MARKER):
                 stats['compact_markers'].append((line_no, ts))
+                current_chunk['compact_markers'].append((line_no, ts))
             else:
                 maybe_collect_prompt(text)
+                maybe_collect_chunk_prompt(text)
 
         elif t == 'assistant':
             stats['msg_assistant'] += 1
+            current_chunk['msg_assistant'] += 1
             if isinstance(content, list):
                 for c in content:
-                    if not isinstance(c, dict):
-                        continue
+                    if not isinstance(c, dict): continue
                     ctype = c.get('type', '')
                     if ctype == 'tool_use':
-                        stats['tool_use_counter'][c.get('name', 'unknown')] += 1
+                        nm = c.get('name', 'unknown')
+                        stats['tool_use_counter'][nm] += 1
+                        current_chunk['tool_use_counter'][nm] += 1
                     elif ctype == 'text':
                         txt = c.get('text', '')
                         if txt.startswith('<ebr-substrate-banner>'):
                             stats['banner_emissions'].append((line_no, ts))
+                            current_chunk['banner_emissions'].append((line_no, ts))
             elif isinstance(content, str):
                 if content.startswith('<ebr-substrate-banner>'):
                     stats['banner_emissions'].append((line_no, ts))
+                    current_chunk['banner_emissions'].append((line_no, ts))
 
         elif t == 'system':
             stats['msg_system'] += 1
+            current_chunk['msg_system'] += 1
         else:
             stats['msg_other'] += 1
+            current_chunk['msg_other'] += 1
+
+# Emit CURRENT chunk (frozen=false) after the parse loop
+write_chunk_atomic(current_chunk, frozen=False)
+
+# Re-read file size (may have grown during the run — refresh the snapshot)
+size_bytes = os.path.getsize(jsonl_path)
+
+# Emit HEAD.md — scan session_dir for all chunks + assemble metadata
+def parse_chunk_frontmatter(path):
+    try:
+        with open(path) as f:
+            buf = f.read()
+        # crude YAML-ish frontmatter extraction (between --- lines)
+        m = re.search(r'^---\s*$(.*?)^---\s*$', buf, re.MULTILINE | re.DOTALL)
+        if not m: return None
+        block = m.group(1)
+        meta = {}
+        for line in block.split('\n'):
+            for key in ('chunk_id', 'frozen', 'lines', 'bytes', 'mtime'):
+                pat = rf'^\s+{key}:\s*(.+)$'
+                mm = re.match(pat, line)
+                if mm:
+                    val = mm.group(1).strip()
+                    if key == 'chunk_id':
+                        meta[key] = int(val)
+                    elif key == 'frozen':
+                        meta[key] = val.lower() == 'true'
+                    elif key in ('lines', 'bytes'):
+                        nums = re.findall(r'\d+', val)
+                        if len(nums) == 2: meta[key] = [int(nums[0]), int(nums[1])]
+                    else:
+                        meta[key] = val
+        return meta
+    except Exception:
+        return None
+
+chunk_files = sorted([f for f in os.listdir(session_dir) if f.startswith('chunk-') and f.endswith('.md')])
+chunk_entries = []
+for cf in chunk_files:
+    meta = parse_chunk_frontmatter(os.path.join(session_dir, cf))
+    if meta:
+        chunk_entries.append({
+            'id': meta.get('chunk_id', 0),
+            'file': cf,
+            'lines': meta.get('lines', [0, 0]),
+            'bytes': meta.get('bytes', [0, 0]),
+            'frozen': meta.get('frozen', False),
+        })
+
+head_path = os.path.join(session_dir, 'HEAD.md')
+head_yaml = ['---', f'session_id: {sid}', f'current_chunk_id: {current_chunk["chunk_id"]}',
+             f'total_lines: {stats["total_lines"]}', f'total_bytes: {size_bytes}',
+             'rollup:',
+             f'  msg_user: {stats["msg_user"]}',
+             f'  msg_assistant: {stats["msg_assistant"]}',
+             f'  msg_system: {stats["msg_system"]}',
+             f'  msg_other: {stats["msg_other"]}',
+             f'  first_ts: {stats["first_ts"] or "null"}',
+             f'  last_ts: {stats["last_ts"] or "null"}',
+             '  tool_use:']
+for nm, ct in stats['tool_use_counter'].most_common():
+    head_yaml.append(f'    {nm}: {ct}')
+head_yaml.append('chunks:')
+for ce in chunk_entries:
+    head_yaml.append(f'  - id: {ce["id"]}')
+    head_yaml.append(f'    file: {ce["file"]}')
+    head_yaml.append(f'    lines: [{ce["lines"][0]}, {ce["lines"][1]}]')
+    head_yaml.append(f'    bytes: [{ce["bytes"][0]}, {ce["bytes"][1]}]')
+    head_yaml.append(f'    frozen: {str(ce["frozen"]).lower()}')
+head_yaml.append('---')
+head_yaml.append('')
+head_yaml.append(f'# Session {sid[:8]} chunk index (HEAD)')
+head_yaml.append('')
+head_yaml.append(f'{len(chunk_entries)} chunk(s). Current chunk: `chunk-{current_chunk["chunk_id"]:03d}.md`. '
+                 f'Total {stats["total_lines"]} lines / {size_bytes} bytes.')
+head_yaml.append('')
+head_yaml.append('_HEAD.md is a convenience index; the chunk file\'s own `frozen` frontmatter is authoritative._')
+fd, tmp = tempfile.mkstemp(dir=session_dir, prefix='.tmp-head-')
+try:
+    with os.fdopen(fd, 'w') as wf:
+        wf.write('\n'.join(head_yaml))
+    os.replace(tmp, head_path)
+except Exception:
+    if os.path.exists(tmp): os.unlink(tmp)
+    raise
 
 # ── persist sidecar (the streaming foundation) ────────────────────────────
-size_bytes = os.path.getsize(jsonl_path)
+# size_bytes was already refreshed before HEAD.md write
 new_state = {
     'version': SIDECAR_VERSION,
     'session_id': sid,
@@ -303,6 +545,24 @@ new_state = {
     'recent_user_prompts': stats['recent_user_prompts'],
     'parse_errors': stats['parse_errors'],
     'updated_at': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+    # Phase 1.5 — current chunk accumulator so next run resumes mid-chunk
+    'current_chunk': {
+        'chunk_id': current_chunk['chunk_id'],
+        'line_start': current_chunk['line_start'],
+        'line_end': current_chunk['line_end'],
+        'byte_start': current_chunk['byte_start'],
+        'byte_end': current_chunk['byte_end'],
+        'msg_user': current_chunk['msg_user'],
+        'msg_assistant': current_chunk['msg_assistant'],
+        'msg_system': current_chunk['msg_system'],
+        'msg_other': current_chunk['msg_other'],
+        'first_ts': current_chunk['first_ts'],
+        'last_ts': current_chunk['last_ts'],
+        'compact_markers': [list(x) for x in current_chunk['compact_markers']],
+        'banner_emissions': [list(x) for x in current_chunk['banner_emissions']],
+        'tool_use_counter': dict(current_chunk['tool_use_counter']),
+        'recent_user_prompts': current_chunk['recent_user_prompts'],
+    },
 }
 fd, tmp = tempfile.mkstemp(dir=OFFSETS_DIR, prefix='.tmp-off-')
 try:
