@@ -1,23 +1,32 @@
 # GAE Standard service for the verum pair-relay.
 #
-# manual_scaling: instances: 1 is LOAD-BEARING, not a cost knob: the relay holds
-# pairing state in an in-memory Map, so there must be EXACTLY ONE instance. With
-# autoscaling (even min_instances:1) a second instance could serve a poll that
-# can't see a claim POSTed to the first. manual_scaling pins one always-on
-# instance; store-and-forward then holds within the 15-min TTL window.
+# Pinned to EXACTLY ONE always-on instance — load-bearing, not a cost knob: the
+# relay holds pairing state in an in-memory Map, so there must be exactly one
+# instance. A second instance would not see the first's Map (a claim POSTed to
+# instance A would be invisible to a poll routed to instance B), and zero
+# instances (scale-to-zero) would drop state on every idle.
+#
+#   min_instances: 1  → keeps one instance always warm (no scale-to-zero loss)
+#   max_instances: 1  → never scales out (no Map split across instances)
+#
+# NOTE: we use automatic_scaling{min=max=1} rather than manual_scaling. On GAE
+# Standard the manual_scaling instance would not receive routed traffic (every
+# request returned a GFE 404 despite SERVING + /_ah/start 200); automatic_scaling
+# is the mode the sibling services use and routes correctly. The /_ah/start
+# handler in server.ts is retained (harmless) regardless.
 #
 # Routed as relay.verum.sh via dispatch.yaml in the verum.sh repo (see README).
 # Deploy:  gcloud app deploy app.yaml --project=mae-stack-prod
-# NOTE: mae-stack-prod runs a priority-1 DENY-all firewall (scale-to-zero
-# posture). Open it for the pair routes before the online path will work:
-#   gcloud app firewall-rules create 100 --project=mae-stack-prod \
-#     --source-range="*" --action=allow   # (or scope narrower as desired)
+# NOTE: mae-stack-prod runs an allow-list/deny-all firewall (semi-live posture).
+# Reachability is governed there; opening to the public re-exposes ALL services
+# (App Engine firewall is app-wide + IP-based, not per-service/path).
 
 runtime: nodejs22
 service: pair-relay
 
-manual_scaling:
-  instances: 1
+automatic_scaling:
+  min_instances: 1
+  max_instances: 1
 
 entrypoint: node --experimental-strip-types server.ts
 

@@ -36,9 +36,9 @@ echo "BASE=$BASE"
 echo "nonce=$NONCE"
 echo
 
-# ── [0] healthz / reachability ──
-echo "── [0] GET /healthz ──"
-HEALTH="$(curl -s --max-time 15 "$BASE/healthz" || true)"
+# ── [0] health / reachability ── (GAE Standard reserves /healthz, so use /)
+echo "── [0] GET / (health) ──"
+HEALTH="$(curl -s --max-time 15 "$BASE/" || true)"
 if printf '%s' "$HEALTH" | grep -qi '<html'; then
   echo "$HEALTH" | head -3
   fail "got an HTML page, not JSON. Likely the GAE firewall is blocking this IP (run from the allow-listed network) OR the SSL cert is not live yet."

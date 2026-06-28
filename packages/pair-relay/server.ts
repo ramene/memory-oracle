@@ -111,8 +111,19 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Health check
-    if (url.pathname === '/' || url.pathname === '/healthz') {
+    // GAE manual-scaling lifecycle. A manual_scaling instance MUST answer
+    // /_ah/start with a 2xx to be marked ready; otherwise GAE routes no user
+    // traffic to it and every request returns a GFE 404 (not the app's 404).
+    // /_ah/stop fires on shutdown; /_ah/warmup on warmup requests.
+    if (url.pathname === '/_ah/start' || url.pathname === '/_ah/stop' || url.pathname === '/_ah/warmup') {
+      noContent(res, 200);
+      return;
+    }
+
+    // Health check. NB: GAE Standard reserves /healthz (it never reaches the
+    // app — returns a GFE 404), so / and /health are the canonical health paths;
+    // /healthz is kept only for local use.
+    if (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/healthz') {
       json(res, 200, { ok: true, pairings: pairings.size, ts: new Date().toISOString() });
       return;
     }
@@ -213,7 +224,7 @@ server.listen(PORT, () => {
   console.log(`[pair-relay] listening on http://0.0.0.0:${PORT}`);
   console.log(`[pair-relay] in-memory state — ephemeral across restarts; deploy with manual_scaling: instances: 1`);
   console.log(`[pair-relay] routes:`);
-  console.log(`  GET  /healthz`);
+  console.log(`  GET  /  /health                        (health; GAE reserves /healthz)`);
   console.log(`  POST /pair/claim                       (phone   → relay)`);
   console.log(`  GET  /pair/claim?nonce=<nonce>         (desktop polls claim)`);
   console.log(`  POST /pair                             (desktop → relay: age_file_b64)`);

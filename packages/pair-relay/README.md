@@ -37,7 +37,7 @@ mismatched `for` vs the claim's `device_recipient` is rejected (400 on deliver,
 
 | method | path | who | returns |
 |---|---|---|---|
-| GET | `/healthz` | — | `{ ok, pairings, ts }` |
+| GET | `/` or `/health` | — | `{ ok, pairings, ts }` (GAE reserves `/healthz`) |
 | POST | `/pair/claim` | phone | `201 { ok, expiresAt }` |
 | GET | `/pair/claim?nonce=` | desktop | claim JSON · `204` until claimed |
 | POST | `/pair` | desktop | `200 { ok }` · `404`/`409`/`400` guards |
