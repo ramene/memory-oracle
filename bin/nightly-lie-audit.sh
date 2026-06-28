@@ -73,40 +73,49 @@ for repo_dir in "${HOME}/.remote/github.com/@ramene"/*/; do
   [ "$DRY" -eq 1 ] && { echo "  [dry-run] would check $repo"; continue; }
 
   cd "$repo_dir" 2>/dev/null || continue
-  git fetch -q origin main 2>/dev/null
+  # Compare against the TRACKING branch, not blindly origin/main. A repo on
+  # a feature branch (e.g. chore/decommission-cleanup) tracking its own
+  # origin/<branch> is NOT a lie if it's in sync with its tracking ref.
+  CURBRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  UPSTREAM_REF=$(git rev-parse --abbrev-ref HEAD@{upstream} 2>/dev/null)
+  if [ -z "$UPSTREAM_REF" ]; then
+    # No tracking branch — fall back to origin/main
+    UPSTREAM_REF="origin/main"
+  fi
+  git fetch -q origin 2>/dev/null
   LOCAL=$(git rev-parse --short=8 HEAD 2>/dev/null)
-  REMOTE=$(git rev-parse --short=8 origin/main 2>/dev/null)
+  REMOTE=$(git rev-parse --short=8 "$UPSTREAM_REF" 2>/dev/null)
   [ -z "$LOCAL" ] || [ -z "$REMOTE" ] && continue
 
   if [ "$LOCAL" != "$REMOTE" ]; then
-    AHEAD=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)
-    BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+    AHEAD=$(git rev-list --count "$UPSTREAM_REF"..HEAD 2>/dev/null || echo 0)
+    BEHIND=$(git rev-list --count HEAD.."$UPSTREAM_REF" 2>/dev/null || echo 0)
     if [ "$AHEAD" -gt 0 ] && [ "$BEHIND" -eq 0 ]; then
-      # We have local commits not on upstream — could be safe to push (fast-forward)
-      log_lie "$repo: $AHEAD local commit(s) unpushed (local=$LOCAL upstream=$REMOTE)"
+      # We have local commits not on tracking branch — fast-forward push
+      log_lie "$repo ($CURBRANCH): $AHEAD local commit(s) unpushed (local=$LOCAL upstream=$UPSTREAM_REF@$REMOTE)"
       if [ "$NO_FIX" -eq 0 ]; then
-        if git push origin "main" 2>&1 | grep -q "main -> main"; then
-          log_fix "$repo: pushed $AHEAD commit(s) to origin/main"
+        if git push origin "HEAD:${CURBRANCH}" 2>&1 | grep -q "HEAD -> ${CURBRANCH}\|${CURBRANCH} -> ${CURBRANCH}"; then
+          log_fix "$repo ($CURBRANCH): pushed $AHEAD commit(s) to $UPSTREAM_REF"
         else
-          log_brief "$repo: push failed — manual investigation needed (local=$LOCAL upstream=$REMOTE)"
+          log_brief "$repo ($CURBRANCH): push failed — manual investigation needed (local=$LOCAL upstream=$REMOTE)"
         fi
       else
-        log_brief "$repo: $AHEAD unpushed commits (run git push manually)"
+        log_brief "$repo ($CURBRANCH): $AHEAD unpushed commits (run git push manually)"
       fi
     elif [ "$BEHIND" -gt 0 ] && [ "$AHEAD" -eq 0 ]; then
-      log_lie "$repo: $BEHIND upstream commit(s) unpulled (local=$LOCAL upstream=$REMOTE)"
+      log_lie "$repo ($CURBRANCH): $BEHIND upstream commit(s) unpulled (local=$LOCAL upstream=$UPSTREAM_REF@$REMOTE)"
       if [ "$NO_FIX" -eq 0 ]; then
-        if git pull --rebase --autostash 2>&1 | grep -q "Fast-forward\|Successfully rebased"; then
-          log_fix "$repo: pulled $BEHIND commit(s) from origin/main"
+        if git pull --rebase --autostash 2>&1 | grep -q "Fast-forward\|Successfully rebased\|Already up to date"; then
+          log_fix "$repo ($CURBRANCH): pulled $BEHIND commit(s) from $UPSTREAM_REF"
         else
-          log_brief "$repo: pull failed — uncommitted changes or merge conflict; manual review"
+          log_brief "$repo ($CURBRANCH): pull failed — uncommitted changes or merge conflict; manual review"
         fi
       else
-        log_brief "$repo: $BEHIND unpulled commits"
+        log_brief "$repo ($CURBRANCH): $BEHIND unpulled commits"
       fi
     else
-      log_lie "$repo: DIVERGED (local=$LOCAL +$AHEAD upstream=$REMOTE +$BEHIND)"
-      log_brief "$repo: diverged history — needs operator decision (force? merge? abandon?)"
+      log_lie "$repo ($CURBRANCH): DIVERGED (local=$LOCAL +$AHEAD upstream=$REMOTE +$BEHIND)"
+      log_brief "$repo ($CURBRANCH): diverged history — needs operator decision (force? merge? abandon?)"
     fi
   fi
 done
