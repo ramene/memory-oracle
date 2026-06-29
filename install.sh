@@ -291,8 +291,23 @@ esac
 # current crontab (empty if none), with our marked lines stripped
 # strip BOTH our marked lines AND any pre-existing unmarked vault-autosync/brain-sync
 # lines (from manual setups) so re-running never duplicates the cron.
-CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh|memory-hygiene-audit\.mjs|walk-session-jsonl-nightly\.sh --current|nightly-lie-audit\.sh' || true)"
-NEW_CRON="$CURRENT_CRON
+# ALSO strip any pre-existing PATH= line so we don't duplicate it (we replace
+# with the canonical PATH below).
+CURRENT_CRON="$(crontab -l 2>/dev/null | grep -vE 'vault-autosync\.sh|brain-sync\.sh|memory-hygiene-audit\.mjs|walk-session-jsonl-nightly\.sh --current|nightly-lie-audit\.sh|^PATH=' || true)"
+
+# Cron runs with a near-empty PATH — env shebang scripts (memory-hygiene-audit,
+# nightly-lie-audit) fail with "env: node: No such file or directory" because
+# nvm's node lives at ~/.nvm/versions/node/<ver>/bin/. Walker's
+# memory-index-build also hard-falls-back to /usr/local/bin/node when
+# `command -v node` returns empty under PATH-less cron.
+# FIX: prepend a canonical PATH so all cron scripts find node + standard tools.
+# Detect NVM's current node bin dynamically so this works on noodles + sequoia +
+# tunafish regardless of which Node version each runs.
+NVM_NODE_BIN="$(ls -dt "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | head -1)"
+CRON_PATH="${NVM_NODE_BIN:-/usr/local/bin}:/Users/$USER/.bin/google-cloud-sdk/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+NEW_CRON="PATH=$CRON_PATH
+$CURRENT_CRON
 $VAULT_LINE
 $WALKER_LINE
 $HYGIENE_LINE"

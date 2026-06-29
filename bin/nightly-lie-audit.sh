@@ -211,11 +211,29 @@ if [ ${#TODAYS_CARDS[@]} -gt 0 ]; then
 fi
 
 # ─── 5. MAE-PLUGIN main.js parity ─────────────────────────────────────────
-section "5. MAE-PLUGIN main.js parity"
+# Respects dev-containment markers: if a peer has ~/.local/share/mae-dev/.contained
+# present (operator OR sequoia is intentionally running a contained dev build),
+# SKIP the divergence check + auto-fix for that peer. This preserves the
+# "stage build sequoia-local, ship to vault only after operator ratifies"
+# pattern that the lmcanvas + Cannoli arcs depend on.
+# Earned 2026-06-29: the audit auto-pulled sequoia's vault and re-aligned mae
+# plugin from a peer, defeating sequoia's intentional containment. See:
+#   feedback_verify_push_landed_not_just_script_output.md (the trust hierarchy
+#   rule the operator chose path-A on for fix 4).
+section "5. MAE-PLUGIN main.js parity (containment-aware)"
 MAE_PATH="${HOME}/.remote/@vaults/.build/obsidian-vault/.obsidian/plugins/mae/main.js"
 if [ -f "$MAE_PATH" ]; then
   noodles_mae=$(md5 -q "$MAE_PATH" 2>/dev/null)
   for peer in sequoia tunafish; do
+    # Containment check: does the peer have ~/.local/share/mae-dev/.contained?
+    # Marker file is created by the dev workflow when staging a build that
+    # MUST NOT be cluster-propagated until explicit operator approval.
+    peer_contained=$(ssh -o ConnectTimeout=4 -o BatchMode=yes "$peer" \
+      "[ -f ~/.local/share/mae-dev/.contained ] && echo yes" 2>/dev/null | tr -d ' ')
+    if [ "$peer_contained" = "yes" ]; then
+      log_fix "$peer in dev-contained mode (.contained marker present) — SKIPPED mae plugin parity check"
+      continue
+    fi
     peer_mae=$(ssh -o ConnectTimeout=4 -o BatchMode=yes "$peer" "md5 -q ~/.remote/@vaults/.build/obsidian-vault/.obsidian/plugins/mae/main.js 2>/dev/null" 2>/dev/null)
     if [ -z "$peer_mae" ]; then
       log_lie "mae plugin main.js MISSING on $peer"
