@@ -42,6 +42,7 @@ DATE=$(date +%Y-%m-%d)
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 JSON_REPORT="${HOME}/.claude-tmp/lie-audit-${DATE}.json"
 DIGEST_PATH="${HOME}/.local/share/journal/_digests/${DATE}.md"
+mkdir -p "$(dirname "$DIGEST_PATH")" 2>/dev/null
 CARDS_DIR="${HOME}/.claude/projects/_global/memory"
 
 for arg in "$@"; do
