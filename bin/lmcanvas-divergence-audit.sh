@@ -10,6 +10,7 @@ for host in sequoia tunafish; do
      echo \$(git rev-parse --short HEAD 2>/dev/null) \$(git rev-list --count HEAD..origin/$BR 2>/dev/null) \$(git status --porcelain 2>/dev/null|wc -l|tr -d ' ')" 2>/dev/null)
   H[$host]="$head"
   if [ -z "$head" ]; then echo "  ✗ LIE: $host lmcanvas checkout unreachable/missing"; LIES=$((LIES+1)); continue; fi
+  [ -z "$behind" ] && { echo "  ✗ LIE: $host origin/$BR does not resolve (bad branch/ref)"; LIES=$((LIES+1)); }
   [ "${behind:-0}" != "0" ] && { echo "  ✗ LIE: $host lmcanvas $behind commit(s) behind origin/$BR (head=$head)"; LIES=$((LIES+1)); }
   [ "${dirty:-0}" != "0" ] && { echo "  ⚠ WARN: $host lmcanvas has $dirty uncommitted file(s)"; }
 done
