@@ -48,7 +48,7 @@ for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh repo-write-tx.sh \
          walk-session-jsonl-nightly.sh walk-tmux-logs-nightly.sh nightly-lie-audit.sh \
          git-remote-verum \
          mae-pulse-daemon.mjs mae-pulse-status.mjs verum-vrm3.mjs \
-         claude-hook-substrate-guard.mjs \
+         claude-hook-substrate-guard.mjs claude-hook-recall-first-guard.sh \
          claude-hook-memory-hygiene.mjs memory-hygiene-audit.mjs \
          mae-substrate-export.mjs mae-substrate-import.mjs mae-substrate-merge.mjs mae-verum-pubkeys.mjs; do
   if [ -f "$SCRIPT_DIR/bin/$f" ]; then
@@ -156,6 +156,18 @@ if not has_command(pt, "claude-hook-substrate-guard.mjs"):
     print("  registered PreToolUse(Bash) -> claude-hook-substrate-guard.mjs")
 else:
     print("  PreToolUse(Bash) substrate guard already registered")
+
+# PreToolUse(Bash) -> recall-first guard (forces `substrate search` recall before a recipe-governed
+# op — video ingest, daemon build, sync, verum… — so the agent uses the PROVEN recipe, not a guess).
+if not has_command(pt, "claude-hook-recall-first-guard.sh"):
+    pt.append({
+        "matcher": "Bash",
+        "hooks": [{"type": "command", "command": "$HOME/.bin/claude-hook-recall-first-guard.sh"}],
+    })
+    changed = True
+    print("  registered PreToolUse(Bash) -> claude-hook-recall-first-guard.sh")
+else:
+    print("  PreToolUse(Bash) recall-first guard already registered")
 
 # PreToolUse(Write|Edit|NotebookEdit) -> memory-hygiene guard
 if not has_command(pt, "claude-hook-memory-hygiene.mjs"):
