@@ -426,9 +426,29 @@ add_mesh_host sequoia  192.168.100.14
 add_mesh_host tunafish 192.168.100.12
 
 # --- initial index build -----------------------------------------------------
-echo "[memory-oracle] building initial index..."
-node "$BIN_DIR/memory-index-build.mjs"
-node "$BIN_DIR/memory-structural-index.mjs"
+# GUARD: skip the full rebuild when a --watch indexer is already running.
+#
+# Why: this is the INITIAL-index step, but install.sh is overwhelmingly re-run as
+# `git pull && ./install.sh` to ship a one-line tool change. On any machine already
+# carrying a live `memory-index-build.mjs --watch`, the unconditional rebuild starts
+# a SECOND indexer over the same corpus — the documented resource-hog pattern that
+# has melted this cluster before (see the */5 walker FTS full-rebuild incidents).
+# Observed 2026-07-21 on sequoia: a routine tool propagation spawned a concurrent
+# indexer beside the live watcher.
+#
+# The watcher already keeps the index current, so the rebuild is redundant exactly
+# when it is most expensive. SUBSTRATE_FORCE_REINDEX=1 overrides for a genuine
+# first install or a deliberate rebuild.
+_watch_pid="$(pgrep -f 'memory-index-build\.mjs --watch' 2>/dev/null | head -1)"
+if [ -n "$_watch_pid" ] && [ "${SUBSTRATE_FORCE_REINDEX:-0}" != "1" ]; then
+  echo "[memory-oracle] SKIPPING index rebuild — live --watch indexer running (pid $_watch_pid)."
+  echo "                the watcher keeps the index current; a second pass would only"
+  echo "                duplicate work. Force with SUBSTRATE_FORCE_REINDEX=1."
+else
+  echo "[memory-oracle] building initial index..."
+  node "$BIN_DIR/memory-index-build.mjs"
+  node "$BIN_DIR/memory-structural-index.mjs"
+fi
 
 echo ""
 echo "[memory-oracle] install complete."
