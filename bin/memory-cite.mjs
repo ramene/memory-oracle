@@ -57,11 +57,55 @@ function parseArgs(argv) {
 }
 
 function findTranscript(sessionId) {
+  // Resolves BOTH a full uuid and a short prefix (e.g. `86eb7a09`).
+  //
+  // Why prefixes matter: every surface a human or agent reads a session id FROM —
+  // the hook-debug log, the SessionStart banner, `substrate send` output, the
+  // tmux-session-map — prints the 8-char prefix. Exact-match-only meant the id you
+  // can actually SEE returned "no transcript found", which reads as "no history
+  // exists" rather than "you passed a prefix". That false negative cost a full
+  // recovery cycle on 2026-07-20 after LEAD session 86eb7a09 died: the transcript
+  // was sitting right there, 198.9 MB of it, and the tool said it wasn't.
   if (!existsSync(PROJECTS_ROOT)) return null;
-  for (const proj of readdirSync(PROJECTS_ROOT)) {
+  const projects = readdirSync(PROJECTS_ROOT);
+
+  // Fast path: exact id.
+  for (const proj of projects) {
     const candidate = join(PROJECTS_ROOT, proj, `${sessionId}.jsonl`);
-    if (existsSync(candidate)) return { project: proj, path: candidate };
+    if (existsSync(candidate)) return { project: proj, path: candidate, sessionId };
   }
+
+  // Prefix resolution. Collect ALL matches before deciding — never silently take
+  // the first, or a prefix shared by two sessions would cite the wrong transcript.
+  const matches = [];
+  for (const proj of projects) {
+    const dir = join(PROJECTS_ROOT, proj);
+    let entries;
+    try { entries = readdirSync(dir); } catch { continue; }
+    for (const f of entries) {
+      if (!f.endsWith('.jsonl')) continue;
+      const id = f.slice(0, -6);
+      if (id.startsWith(sessionId)) {
+        matches.push({ project: proj, path: join(dir, f), sessionId: id });
+      }
+    }
+  }
+
+  if (matches.length === 1) {
+    const m = matches[0];
+    // Announce the resolution on stderr: the caller asked for a prefix and is
+    // getting a specific full uuid back. Silent expansion would be its own trap.
+    console.error(`# resolved prefix ${sessionId} → ${m.sessionId}  (${m.project})`);
+    return m;
+  }
+
+  if (matches.length > 1) {
+    console.error(`error: prefix ${sessionId} is ambiguous — ${matches.length} sessions match:`);
+    for (const m of matches) console.error(`  ${m.sessionId}  (${m.project})  ${fileSize(m.path)}`);
+    console.error(`Pass more characters, or the full uuid.`);
+    process.exit(7);
+  }
+
   return null;
 }
 
@@ -153,7 +197,14 @@ function fileSize(path) {
 async function main() {
   const opts = parseArgs(ARGS);
   const found = findTranscript(opts.session);
-  if (!found) { console.error(`error: no transcript found for session ${opts.session} under ${PROJECTS_ROOT}`); process.exit(3); }
+  if (!found) {
+    console.error(`error: no transcript found for session ${opts.session} under ${PROJECTS_ROOT}`);
+    console.error(`(tried exact id AND prefix match — this session genuinely has no JSONL here)`);
+    process.exit(3);
+  }
+  // Use the RESOLVED full uuid everywhere downstream, so printed headers are
+  // copy-pasteable into `claude --resume` / `substrate send` without re-lookup.
+  opts.session = found.sessionId;
 
   if (opts.info) {
     // Stream once to get first ts, last ts, count
