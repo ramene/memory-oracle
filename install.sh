@@ -45,6 +45,7 @@ done
 # SINGLE propagation path: `git pull && ./install.sh` deploys the whole substrate.
 for f in brain-sync.sh vault-autosync.sh vault-write-tx.sh repo-write-tx.sh \
          vault-submod-push.sh substrate-health.sh substrate-search \
+         substrate-backup-pull.sh \
          walk-session-jsonl-nightly.sh walk-tmux-logs-nightly.sh nightly-lie-audit.sh \
          git-remote-verum \
          mae-pulse-daemon.mjs mae-pulse-status.mjs verum-vrm3.mjs \
