@@ -15,6 +15,7 @@
 // Day 14 of mae-ADR-001 (2026-05-16).
 
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 
@@ -109,6 +110,60 @@ function findTranscript(sessionId) {
   return null;
 }
 
+function resolveTmuxName(name) {
+  // Fold-in with tmux-session-map (.dotfiles/bin, commit 76504cb): that tool maps
+  // tmux session NAME -> claude session id; this one maps id -> transcript. Chained,
+  // `memory-cite memory-priming` works, which is the question anyone actually has
+  // after a crash ("what was that pane doing?") — nobody memorizes uuids.
+  //
+  // Trust model is THEIRS and we honour it: origin:"live-hook" rows are authoritative
+  // (the hook knew its own $TMUX_PANE); "backfill-banner" rows only claim that a
+  // banner RENDERED in that pane, which is false for orchestration consoles that
+  // display foreign banners. So: live-hook first, and only then banner rows.
+  //
+  // The extra gate — the resolved id must have a transcript ON DISK — exists because
+  // the store contains live-hook rows with empty transcripts (e.g. the `vtest` row on
+  // memory-priming). A row can be authoritative about a pane and still point at
+  // nothing citeable.
+  const bin = join(process.env.HOME, '.bin', 'tmux-session-map.mjs');
+  if (!existsSync(bin)) return null;
+  let out;
+  try {
+    out = execFileSync(bin, ['resolve', name], { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { return null; }
+
+  const rows = [];
+  for (const ln of out.split('\n')) {
+    if (!ln.trim()) continue;
+    try { rows.push(JSON.parse(ln)); } catch {}
+  }
+  // Stable ordering: live-hook ahead of everything else, each group newest-first
+  // (resolve already emits newest-first, so a stable partition preserves that).
+  const ranked = [...rows.filter(r => r.origin === 'live-hook'), ...rows.filter(r => r.origin !== 'live-hook')];
+
+  for (const r of ranked) {
+    const id = r.claude_session_id;
+    if (!id) continue;
+    if (!findTranscriptQuiet(id)) continue;   // must be citeable, not merely recorded
+    console.error(`# resolved tmux name ${JSON.stringify(name)} → ${id}  (origin=${r.origin}, ts=${(r.ts || '').slice(0, 19)}Z)`);
+    if (r.origin !== 'live-hook') {
+      console.error(`# ⚠ backfill-banner row: this session's banner RENDERED in that pane; it may not have RUN there.`);
+    }
+    return id;
+  }
+  return null;
+}
+
+function findTranscriptQuiet(sessionId) {
+  // Existence probe with no stderr chatter and no exit-on-ambiguity — used while
+  // ranking candidate rows, where a miss is normal and must not kill the process.
+  if (!existsSync(PROJECTS_ROOT)) return null;
+  for (const proj of readdirSync(PROJECTS_ROOT)) {
+    if (existsSync(join(PROJECTS_ROOT, proj, `${sessionId}.jsonl`))) return true;
+  }
+  return null;
+}
+
 function streamLines(path) {
   // Async iterator yielding {n, raw, parsed} — 1-indexed. Streams to avoid V8 string limit.
   const rl = createInterface({ input: createReadStream(path, { encoding: 'utf8' }), crlfDelay: Infinity });
@@ -196,10 +251,21 @@ function fileSize(path) {
 
 async function main() {
   const opts = parseArgs(ARGS);
-  const found = findTranscript(opts.session);
+  // id / id-prefix first; then fall back to a tmux session NAME via tmux-session-map.
+  // Order matters only for correctness of the error message — the two namespaces
+  // don't collide in practice (uuids aren't valid tmux names here).
+  let found = findTranscript(opts.session);
+  if (!found) {
+    const viaName = resolveTmuxName(opts.session);
+    if (viaName) found = findTranscript(viaName);
+  }
   if (!found) {
     console.error(`error: no transcript found for session ${opts.session} under ${PROJECTS_ROOT}`);
-    console.error(`(tried exact id AND prefix match — this session genuinely has no JSONL here)`);
+    console.error(`(tried exact id, id-prefix, AND tmux session name via tmux-session-map)`);
+    if (!existsSync(join(process.env.HOME, '.bin', 'tmux-session-map.mjs'))) {
+      console.error(`note: ~/.bin/tmux-session-map.mjs is NOT installed here, so name lookup was skipped.`);
+      console.error(`      ln -s ~/.remote/github.com/@ramene/.dotfiles/bin/tmux-session-map.mjs ~/.bin/`);
+    }
     process.exit(3);
   }
   // Use the RESOLVED full uuid everywhere downstream, so printed headers are
