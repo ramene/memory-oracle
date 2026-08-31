@@ -6,7 +6,9 @@
   "main": "server.ts",
   "scripts": {
     "start": "node --experimental-strip-types server.ts",
-    "test:curl": "bash test/curl-test.sh"
+    "start:signin": "node --experimental-strip-types verum-signin-relay.ts",
+    "test:curl": "bash test/curl-test.sh",
+    "test:signin": "bash test/signin-curl-test.sh"
   },
   "engines": {
     "node": ">=22"
