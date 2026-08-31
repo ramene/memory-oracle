@@ -1,0 +1,21 @@
+# Google App Engine (standard, nodejs22) deploy posture for relay.verum.sh —
+# the PUBLIC verum-signin relay. Same posture as the karve.ai services.
+#
+# IMPORTANT: this relay keeps ephemeral state in an in-process Map (by design —
+# sessions live <=90s, single-use). It is therefore pinned to ONE instance so a
+# session and its approval land on the same process. A multi-region / horizontally
+# scaled deploy would require a shared ephemeral store (Memorystore/Redis) — do NOT
+# raise max_instances above 1 without that. TLS is terminated by GAE.
+#
+# Deploy (ONLY on operator go):  gcloud app deploy app.yaml
+runtime: nodejs22
+entrypoint: node --experimental-strip-types verum-signin-relay.ts
+
+instance_class: F1
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1
+  target_cpu_utilization: 0.75
+
+# PORT is injected by GAE (8080). No secrets, no env needed — the relay is
+# zero-knowledge and holds no keys.
