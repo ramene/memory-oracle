@@ -8,7 +8,8 @@
     "start": "node --experimental-strip-types server.ts",
     "start:signin": "node --experimental-strip-types verum-signin-relay.ts",
     "test:curl": "bash test/curl-test.sh",
-    "test:signin": "bash test/signin-curl-test.sh"
+    "test:signin": "bash test/signin-curl-test.sh",
+    "test:signin:e2e": "node --experimental-strip-types test/signin-e2e.ts"
   },
   "engines": {
     "node": ">=22"
