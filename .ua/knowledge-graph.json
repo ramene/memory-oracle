@@ -1,0 +1,294 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "LLM money-flow — $0-local vs cloud-billed",
+    "languages": ["javascript", "python", "shell", "markdown"],
+    "frameworks": ["node", "mlx", "qwen2.5", "whisper", "claude"],
+    "description": "Scoped understand-anything graph of the LLM money-flow: where the journal-digest + SLM train/ingest pipelines are $0-local and where cloud is billed. Layers = billing status: green $0-local, purple billed, gold cloud-by-design (Claude teacher/judge), pink dead/removed, blue gates. Companion to arch-notes doc llm-money-flow-where-zero-where-billed-2026-09-09.",
+    "analyzedAt": "2026-09-09T00:00:00+00:00",
+    "gitCommitHash": "f3bd6c81"
+  },
+  "nodes": [
+    {
+      "id": "document:llm-money-flow-doc",
+      "type": "document",
+      "name": "money-flow doc (arch-notes)",
+      "filePath": "docs/llm-money-flow-where-zero-where-billed-2026-09-09.md",
+      "summary": "Authoritative $0-local-vs-BILLED boundary across the journal-digest and SLM train/ingest pipelines plus the shared substrate-ingest wrapper. Answers the operator worry: no secret cloud leak stands today.",
+      "tags": ["blue:gate", "overview", "arch-notes", "money-boundary"],
+      "complexity": "moderate",
+      "languageNotes": "Markdown reference; color-coded mermaid + 12-node money table + historical-leak closeout."
+    },
+    {
+      "id": "pipeline:digest-assemble",
+      "type": "pipeline",
+      "name": "D0 · assemble day source",
+      "filePath": "~/.bin/journal-digest-builder.mjs",
+      "summary": "tmux-logs for the day are assembled into one source blob (cron 23:55). Entry point of the journal-digest pipeline.",
+      "tags": ["blue:gate", "digest", "entry"],
+      "complexity": "simple",
+      "languageNotes": "Node ESM builder; single cron pass."
+    },
+    {
+      "id": "config:digest-fit-decision",
+      "type": "config",
+      "name": "DFIT · src ≤ 28K local ctx?",
+      "filePath": "~/.bin/journal-digest-builder.mjs",
+      "summary": "Decision gate: does the assembled day fit the local 28K context? YES → single pass; NO → map-reduce on-device. The NO branch is exactly where the historical leak used to fall through to a paid tier.",
+      "tags": ["blue:gate", "digest", "decision", "contextLimit-28000"],
+      "complexity": "moderate",
+      "languageNotes": "contextLimit 28_000; the fall-through-to-paid bug lived on the NO edge."
+    },
+    {
+      "id": "endpoint:digest-local-qwen",
+      "type": "endpoint",
+      "name": "DLOCAL · Qwen2.5-32B :8823/text",
+      "filePath": "tunafish:8823/text",
+      "summary": "T0 local single-pass summarize on Qwen2.5-32B via tunafish :8823/text. The ONLY provider in PROVIDERS[] as of 2026-09-09. $0-local, no cloud path exists.",
+      "tags": ["green:$0-local", "digest", "provider", "qwen2.5-32b"],
+      "complexity": "moderate",
+      "languageNotes": "Single PROVIDERS[] entry (local-text shape); callProvider throws on any other shape."
+    },
+    {
+      "id": "pipeline:digest-mapreduce",
+      "type": "pipeline",
+      "name": "DMR · map-reduce on-device",
+      "filePath": "~/.bin/journal-digest-builder.mjs",
+      "summary": "Oversized-day path: chunk to ≤24.8K-token pieces, summarize each on the 32B (map), merge locally (reduce). All $0-local. This replaced the paid escape hatch — the exact fix for the leak.",
+      "tags": ["green:$0-local", "digest", "leak-fix", "map-reduce"],
+      "complexity": "moderate",
+      "languageNotes": "chunk ≤24.8K tok → map → reduce; keeps overflow entirely on-device."
+    },
+    {
+      "id": "function:digest-fail-loud",
+      "type": "function",
+      "name": "DFAIL · fail-loud (keeps $0)",
+      "filePath": "~/.bin/journal-digest-builder.mjs",
+      "summary": "If gpu.lock present / a model is resident / :8823 down → readyLocalProvider() throws and the run fails loud. Never silently degrades to a paid API; $0 is preserved.",
+      "tags": ["blue:gate", "digest", "fail-loud", "no-paid-fallback"],
+      "complexity": "simple",
+      "languageNotes": "Old log strings still say 'cloud fallback' — stale wording; actual behavior is fail-loud."
+    },
+    {
+      "id": "endpoint:digest-dead-tiers",
+      "type": "endpoint",
+      "name": "DDEAD · T4 OpenRouter / T5 Gemini (DELETED)",
+      "filePath": "~/.bin/journal-digest-builder.mjs",
+      "summary": "The old paid tiers (T4 openrouter, T5 gemini-direct) were DELETED from the code on 2026-09-09. No code path to a billed endpoint remains; keys commented out of .digest-env.",
+      "tags": ["grey:dead-path", "digest", "removed", "severed"],
+      "complexity": "simple",
+      "languageNotes": "PROVIDERS[] no longer contains these; callProvider refuses non-local-text shapes."
+    },
+    {
+      "id": "pipeline:slm-source",
+      "type": "pipeline",
+      "name": "S0 · course videos / own work",
+      "filePath": "mae-local-stack/ingest",
+      "summary": "SLM flywheel source: course videos and our own captured work. Feeds Whisper + VLM data-generation. $0-local corpus.",
+      "tags": ["blue:gate", "slm", "entry"],
+      "complexity": "simple",
+      "languageNotes": "Private mae-local-stack corpus."
+    },
+    {
+      "id": "file:slm-whisper",
+      "type": "file",
+      "name": "SW · Whisper cwa-transcribe (mlx)",
+      "filePath": "~/.bin/cwa-transcribe.py",
+      "summary": "Whisper large-v3-turbo (mlx) on tunafish, ~50x realtime. Transcribes course video to text for lesson-card fusion. $0-local.",
+      "tags": ["green:$0-local", "slm", "whisper", "mlx"],
+      "complexity": "simple",
+      "languageNotes": "mlx whisper-large-v3-turbo; Apple-Silicon only."
+    },
+    {
+      "id": "endpoint:slm-vlm",
+      "type": "endpoint",
+      "name": "SV · Qwen2.5-VL :8823/ingest",
+      "filePath": "tunafish:8823/ingest",
+      "summary": "Qwen2.5-VL via :8823/ingest|/teardown (7B bulk / 32B math) extracts lesson cards from frames. $0-local. This is the direct-call mitigation for the substrate-ingest gemini footgun.",
+      "tags": ["green:$0-local", "slm", "qwen2.5-vl", "vlm"],
+      "complexity": "moderate",
+      "languageNotes": "7B bulk / 32B math; direct :8823 call = $0."
+    },
+    {
+      "id": "pipeline:slm-cards",
+      "type": "pipeline",
+      "name": "SCARD · fused cards → training pairs",
+      "filePath": "eval-harness/db",
+      "summary": "Whisper + VLM outputs fused into lesson cards, then training pairs in the eval-harness DB. No LLM API call synthesizes the pairs. $0-local.",
+      "tags": ["green:$0-local", "slm", "training-pairs"],
+      "complexity": "moderate",
+      "languageNotes": "Derived from local cards + our own captured work."
+    },
+    {
+      "id": "service:slm-train",
+      "type": "service",
+      "name": "STRAIN · LoRA/QLoRA (MLX, tunafish)",
+      "filePath": "mae-local-stack/train",
+      "summary": "The weights: LoRA/QLoRA fine-tune, MLX on tunafish ONLY. NO cloud, ever. No cloud model ever touched the weights or the training pairs. Serializes under the one gpu.lock.",
+      "tags": ["green:$0-local", "slm", "weights", "mlx", "no-cloud"],
+      "complexity": "complex",
+      "languageNotes": "MLX (Apple Silicon). sequoia x86 cannot MLX → no cloud offload substituted."
+    },
+    {
+      "id": "service:slm-grader",
+      "type": "service",
+      "name": "SGRADE · eval grader (Claude Haiku)",
+      "filePath": "eval-harness/grader",
+      "summary": "The ONE deliberate cloud spend in the SLM flywheel: grader=claude-haiku-4-5, ~12-24 tiny calls, BY DESIGN (Claude = teacher + judge tier). Anthropic, NOT Gemini/OpenRouter. Never touched the weights or pairs.",
+      "tags": ["amber:cloud-by-design", "slm", "eval", "claude-haiku-4-5", "teacher-judge"],
+      "complexity": "moderate",
+      "languageNotes": "Anthropic via Max-plan/OAuth proxy; bounded + visible, not secret."
+    },
+    {
+      "id": "config:slm-x86-block",
+      "type": "config",
+      "name": "SX86 · sequoia x86 → import mlx FAILS",
+      "filePath": "sequoia:no-mlx",
+      "summary": "sequoia is Intel x86, so import mlx fails — it CANNOT train. Crucially, no cloud-GPU offload was used to compensate; training just serializes on tunafish.",
+      "tags": ["blue:gate", "slm", "x86", "no-mlx"],
+      "complexity": "simple",
+      "languageNotes": "single-model-law-tunafish; sequoia-x86-no-mlx."
+    },
+    {
+      "id": "pipeline:ingest-wrapper",
+      "type": "pipeline",
+      "name": "I0 · substrate ingest <media>",
+      "filePath": "substrate ingest",
+      "summary": "Shared substrate-ingest wrapper. Two edges: the DEFAULT footgun (gemini-2.5-flash, cloud) and the mitigation (call :8823 directly, $0). Standing rule: call :8823 directly.",
+      "tags": ["blue:gate", "ingest", "wrapper"],
+      "complexity": "simple",
+      "languageNotes": "Only ambient cloud-leak risk left anywhere; mitigated by direct-:8823 rule."
+    },
+    {
+      "id": "endpoint:ingest-gemini-default",
+      "type": "endpoint",
+      "name": "IGEM · DEFAULT gemini-2.5-flash (footgun)",
+      "filePath": "substrate ingest --default",
+      "summary": "The wrapper DEFAULTS to gemini-2.5-flash — a live billed cloud path if invoked without care. The one remaining ambient leak risk; mitigated by calling :8823 directly.",
+      "tags": ["red:billed", "ingest", "footgun", "gemini-2.5-flash"],
+      "complexity": "simple",
+      "languageNotes": "Live billed default; mitigation is operational (direct :8823), not structural."
+    },
+    {
+      "id": "endpoint:ingest-local-direct",
+      "type": "endpoint",
+      "name": "ILOCAL · call :8823 directly ($0)",
+      "filePath": "tunafish:8823",
+      "summary": "Mitigation path: call :8823 directly (Qwen-VL / Whisper) for $0-local ingest. The zero-cost-video-ingestion-recipe standing rule.",
+      "tags": ["green:$0-local", "ingest", "mitigation"],
+      "complexity": "simple",
+      "languageNotes": "zero-cost-video-ingestion-recipe."
+    },
+    {
+      "id": "endpoint:cloud-openrouter",
+      "type": "endpoint",
+      "name": "OR · openrouter.ai (BILLED, severed)",
+      "filePath": "https://openrouter.ai",
+      "summary": "Billed cloud endpoint. Once the digest's paid tier; now SEVERED — no code path from the digest reaches it. Site of the one historical 3¢ leak.",
+      "tags": ["red:billed", "cloud", "severed", "openrouter"],
+      "complexity": "simple",
+      "languageNotes": "Digest→OpenRouter edge is dashed/severed as of 2026-09-09."
+    },
+    {
+      "id": "endpoint:cloud-gemini",
+      "type": "endpoint",
+      "name": "GEM · generativelanguage (Gemini, BILLED)",
+      "filePath": "https://generativelanguage.googleapis.com",
+      "summary": "Billed Google Gemini endpoint. Severed from the digest; still reachable via the substrate-ingest gemini-2.5-flash default (the footgun). Operator law: DO NOT BILL GEMINI.",
+      "tags": ["red:billed", "cloud", "gemini"],
+      "complexity": "simple",
+      "languageNotes": "Reached only by IGEM footgun today; digest path severed."
+    },
+    {
+      "id": "endpoint:cloud-haiku",
+      "type": "endpoint",
+      "name": "HAIKU · Anthropic Claude Haiku",
+      "filePath": "anthropic:claude-haiku-4-5",
+      "summary": "Anthropic Claude (Haiku) via Max-plan/OAuth proxy. The deliberate teacher/judge endpoint the SLM grader calls. Cloud-by-design, bounded, visible.",
+      "tags": ["amber:cloud-by-design", "cloud", "anthropic", "claude-haiku-4-5"],
+      "complexity": "simple",
+      "languageNotes": "Max-plan/OAuth proxy; subscription-billed, marginal cost tiny."
+    },
+    {
+      "id": "document:historical-leak",
+      "type": "document",
+      "name": "LEAK · 3¢ OpenRouter run (CLOSED)",
+      "filePath": "_digests/2026-09-09.md",
+      "summary": "The one historical leak: a ~80K-token day overflowed the local 28K ctx and fell through to the paid 1M-context tier (~3¢, OpenRouter). Closed two ways: paid tiers deleted + oversized days map-reduced locally.",
+      "tags": ["grey:dead-path", "incident", "closed", "3-cents"],
+      "complexity": "simple",
+      "languageNotes": "Old headers e.g. 2026-06-18 'Provider: T4 openrouter/gemini-2.5-flash', 133,105 input tokens."
+    }
+  ],
+  "edges": [
+    {"source": "document:llm-money-flow-doc", "target": "pipeline:digest-assemble", "type": "documents", "direction": "forward", "weight": 0.5},
+    {"source": "document:llm-money-flow-doc", "target": "pipeline:slm-source", "type": "documents", "direction": "forward", "weight": 0.5},
+    {"source": "document:llm-money-flow-doc", "target": "pipeline:ingest-wrapper", "type": "documents", "direction": "forward", "weight": 0.5},
+    {"source": "document:llm-money-flow-doc", "target": "document:historical-leak", "type": "documents", "direction": "forward", "weight": 0.4},
+    {"source": "pipeline:digest-assemble", "target": "config:digest-fit-decision", "type": "routes", "direction": "forward", "weight": 1.0},
+    {"source": "config:digest-fit-decision", "target": "endpoint:digest-local-qwen", "type": "routes", "direction": "forward", "weight": 1.0},
+    {"source": "config:digest-fit-decision", "target": "pipeline:digest-mapreduce", "type": "routes", "direction": "forward", "weight": 0.8},
+    {"source": "pipeline:digest-mapreduce", "target": "endpoint:digest-local-qwen", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "endpoint:digest-local-qwen", "target": "function:digest-fail-loud", "type": "related", "direction": "forward", "weight": 0.6},
+    {"source": "endpoint:digest-local-qwen", "target": "endpoint:digest-dead-tiers", "type": "related", "direction": "forward", "weight": 0.3},
+    {"source": "endpoint:digest-dead-tiers", "target": "endpoint:cloud-openrouter", "type": "related", "direction": "forward", "weight": 0.2},
+    {"source": "endpoint:digest-dead-tiers", "target": "endpoint:cloud-gemini", "type": "related", "direction": "forward", "weight": 0.2},
+    {"source": "pipeline:slm-source", "target": "file:slm-whisper", "type": "routes", "direction": "forward", "weight": 1.0},
+    {"source": "pipeline:slm-source", "target": "endpoint:slm-vlm", "type": "routes", "direction": "forward", "weight": 1.0},
+    {"source": "file:slm-whisper", "target": "pipeline:slm-cards", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "endpoint:slm-vlm", "target": "pipeline:slm-cards", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "pipeline:slm-cards", "target": "service:slm-train", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "service:slm-train", "target": "service:slm-grader", "type": "related", "direction": "forward", "weight": 0.5},
+    {"source": "service:slm-train", "target": "config:slm-x86-block", "type": "related", "direction": "forward", "weight": 0.3},
+    {"source": "service:slm-grader", "target": "endpoint:cloud-haiku", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "pipeline:ingest-wrapper", "target": "endpoint:ingest-gemini-default", "type": "routes", "direction": "forward", "weight": 0.6},
+    {"source": "pipeline:ingest-wrapper", "target": "endpoint:ingest-local-direct", "type": "routes", "direction": "forward", "weight": 1.0},
+    {"source": "endpoint:ingest-gemini-default", "target": "endpoint:cloud-gemini", "type": "calls", "direction": "forward", "weight": 1.0},
+    {"source": "endpoint:ingest-local-direct", "target": "endpoint:slm-vlm", "type": "related", "direction": "forward", "weight": 0.4},
+    {"source": "document:historical-leak", "target": "endpoint:cloud-openrouter", "type": "documents", "direction": "forward", "weight": 0.3}
+  ],
+  "layers": [
+    {
+      "id": "layer:gates",
+      "name": "① Gates & decision points (blue)",
+      "description": "Entry points, decision forks, and the fail-loud gate. Blue = where the pipeline decides — including the NO edge that used to leak and now map-reduces locally.",
+      "nodeIds": ["document:llm-money-flow-doc", "pipeline:digest-assemble", "config:digest-fit-decision", "function:digest-fail-loud", "pipeline:slm-source", "config:slm-x86-block", "pipeline:ingest-wrapper"]
+    },
+    {
+      "id": "layer:zero-local",
+      "name": "② $0-LOCAL — free, on-device (green)",
+      "description": "Green = $0-local. Qwen2.5-32B/-VL on tunafish :8823, Whisper mlx, MLX LoRA/QLoRA, on-device map-reduce, direct-:8823 ingest. No cloud model touches any of this.",
+      "nodeIds": ["endpoint:digest-local-qwen", "pipeline:digest-mapreduce", "file:slm-whisper", "endpoint:slm-vlm", "pipeline:slm-cards", "service:slm-train", "endpoint:ingest-local-direct"]
+    },
+    {
+      "id": "layer:billed",
+      "name": "③ BILLED cloud — leak & footgun (purple)",
+      "description": "Billed cloud endpoints. Today only the substrate-ingest gemini-2.5-flash DEFAULT is a live billed path (the footgun); OpenRouter/Gemini are severed from the digest. Operator law: DO NOT BILL GEMINI.",
+      "nodeIds": ["endpoint:ingest-gemini-default", "endpoint:cloud-openrouter", "endpoint:cloud-gemini"]
+    },
+    {
+      "id": "layer:cloud-by-design",
+      "name": "④ Cloud-by-design — Claude Haiku teacher/judge (gold)",
+      "description": "Gold/amber = deliberate, bounded cloud spend. The SLM eval grader calls Claude Haiku (~12-24 tiny calls) as teacher + judge. Anthropic, not Gemini/OpenRouter. Never touched the weights or pairs.",
+      "nodeIds": ["service:slm-grader", "endpoint:cloud-haiku"]
+    },
+    {
+      "id": "layer:dead",
+      "name": "⑤ DEAD / removed — severed paths (pink)",
+      "description": "Removed/dead paths. The digest's paid tiers were deleted 2026-09-09; the one historical 3¢ OpenRouter leak is closed twice over (paid tiers removed + oversized days map-reduced locally).",
+      "nodeIds": ["endpoint:digest-dead-tiers", "document:historical-leak"]
+    }
+  ],
+  "tour": [
+    {"order": 1, "title": "The boundary in one breath", "description": "$0-local vs BILLED across digest + SLM. No secret cloud leak stands today.", "nodeIds": ["document:llm-money-flow-doc"]},
+    {"order": 2, "title": "Digest — structurally local-only", "description": "Assemble day → fit? → single-pass Qwen2.5-32B on :8823. One provider, no cloud path.", "nodeIds": ["pipeline:digest-assemble", "config:digest-fit-decision", "endpoint:digest-local-qwen"]},
+    {"order": 3, "title": "Oversized day → map-reduce (the fix)", "description": "The NO edge that used to leak now chunks + map-reduces on-device. $0.", "nodeIds": ["pipeline:digest-mapreduce"]},
+    {"order": 4, "title": "Fail-loud, not fail-to-paid", "description": "Local busy/down → the run errors out and keeps $0. No silent paid degrade.", "nodeIds": ["function:digest-fail-loud"]},
+    {"order": 5, "title": "The removed paid tiers", "description": "T4 OpenRouter / T5 Gemini deleted 2026-09-09; severed from the code.", "nodeIds": ["endpoint:digest-dead-tiers", "endpoint:cloud-openrouter", "endpoint:cloud-gemini"]},
+    {"order": 6, "title": "SLM data-gen — $0-local", "description": "Whisper (mlx) + Qwen2.5-VL (:8823) → fused lesson cards → training pairs.", "nodeIds": ["file:slm-whisper", "endpoint:slm-vlm", "pipeline:slm-cards"]},
+    {"order": 7, "title": "SLM training — $0-local, no cloud ever", "description": "LoRA/QLoRA MLX on tunafish only; sequoia x86 can't MLX and no cloud offload substituted.", "nodeIds": ["service:slm-train", "config:slm-x86-block"]},
+    {"order": 8, "title": "The ONE cloud-by-design node", "description": "The SLM grader calls Claude Haiku (~12-24 calls) as teacher/judge. Bounded, visible, never touched weights/pairs.", "nodeIds": ["service:slm-grader", "endpoint:cloud-haiku"]},
+    {"order": 9, "title": "The substrate-ingest footgun", "description": "Wrapper defaults to gemini-2.5-flash (billed); mitigation = call :8823 directly ($0).", "nodeIds": ["pipeline:ingest-wrapper", "endpoint:ingest-gemini-default", "endpoint:ingest-local-direct"]},
+    {"order": 10, "title": "The one historical leak — closed", "description": "~80K-token day overflowed 28K ctx → ~3¢ OpenRouter. Closed twice over.", "nodeIds": ["document:historical-leak"]}
+  ]
+}
