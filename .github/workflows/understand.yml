@@ -1,0 +1,40 @@
+name: understand-anything regen
+# Cloud GitHub runners CANNOT reach the tailnet (understand.noodles.haus is
+# tailnet-only), so this MUST run on the SELF-HOSTED runner on sequoia — the box
+# that hosts the UA dashboards + the claude CLI. If no runner is registered, the
+# git post-merge hook fallback on the sequoia develop clone does the same work via
+# ~/.bin/ua-regen-on-update.sh. See docs/ua-graphs-in-repo-and-regen-2026-09-09.md.
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - ".ua/knowledge-graph.json"
+      - ".ua/README.md"
+concurrency:
+  group: ua-regen-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regen:
+    runs-on: [self-hosted, sequoia, understand-anything]
+    env:
+      UA_SCOPE: "llm-money-flow"
+      UA_PORT: "5180"
+      UA_TOKEN: "ua-money-flow"
+      UA_LLM_REGEN: "0"   # set to "1" to enable LLM re-analysis (needs an authenticated claude CLI on the runner)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - name: Regen graph + refresh served dashboard (tailnet-only)
+        run: |
+          ~/.bin/ua-regen-on-update.sh "$UA_SCOPE" "$GITHUB_WORKSPACE" "$UA_PORT" "$UA_TOKEN"
+      - name: Commit refreshed graph back (signed)
+        if: ${{ env.UA_LLM_REGEN == '1' }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          if ! git diff --quiet -- .ua/knowledge-graph.json; then
+            git add .ua/knowledge-graph.json
+            git -c commit.gpgsign=true commit -m "chore(ua): regen knowledge graph on push [skip ci]"
+            git push origin develop
+          fi
