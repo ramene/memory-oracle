@@ -267,7 +267,11 @@ function upsertChunk(rec) {
   const meta = parseChunkMeta(original);
   const { body } = parseFrontmatter(original);
   const frozen = meta.frozen ? 1 : 0;
-  const mtime = statSync(rec.path).mtimeMs;
+  // mtime is stored in epoch SECONDS to match the substrate index's other writer
+  // (the Go daemon uses ModTime().Unix()). Node's statSync().mtimeMs is MILLISECONDS —
+  // writing it raw put 28% of the index ~56,000 years in the future, so every row this
+  // script touched sorted as the freshest thing in the substrate. See substrate#6.
+  const mtime = Math.floor(statSync(rec.path).mtimeMs / 1000);
   const hash = sha256(original);
   if (existing.length && existing[0].sha256 === hash) {
     // Content unchanged but the chunk may have just been promoted to frozen — record it
@@ -322,7 +326,11 @@ function upsertFile(rec) {
   const merged = rec.isDigest ? original : getMerged(rec.path);
   const supersessions = rec.isDigest ? [] : loadSupersessionsFor(rec.path);
   const hasSup = supersessions.length > 0 ? 1 : 0;
-  const mtime = statSync(rec.path).mtimeMs;
+  // mtime is stored in epoch SECONDS to match the substrate index's other writer
+  // (the Go daemon uses ModTime().Unix()). Node's statSync().mtimeMs is MILLISECONDS —
+  // writing it raw put 28% of the index ~56,000 years in the future, so every row this
+  // script touched sorted as the freshest thing in the substrate. See substrate#6.
+  const mtime = Math.floor(statSync(rec.path).mtimeMs / 1000);
   const hash = sha256(original + JSON.stringify(supersessions));
   // Fallback name from filename (digests + frontmatter-less files)
   if (!fm.name) fm.name = `${rec.isDigest ? 'digest ' : ''}${basename(rec.file, '.md')}`;

@@ -84,6 +84,12 @@ DEFAULT_GCS_PROJECT = "claey-338919"
 DEFAULT_GCS_IMPERSONATE_SA = "claey-338919@appspot.gserviceaccount.com"
 GCS_INPUT_PREFIX = "inputs"
 GCS_OUTPUT_PREFIX = "outputs"
+
+# Optional per-project namespace. When set via --namespace or manifest.label_slug,
+# inputs/outputs land under inputs/<ns>/<id>.mp4 + outputs/<ns>/<id>-output.json
+# instead of the flat prefix. Prevents short_id collisions across projects
+# (root cause of the 2026-06-20 nightcode/cursor-clone/Tejas collision).
+GCS_NAMESPACE: str = ""
 # Signed-URL TTLs. Input URL outlives the notebook cold-start + run; output URL
 # outlives the run + retrieval lag. Both well under the bucket's 1-day lifecycle.
 DEFAULT_INPUT_TTL_HOURS = 6
@@ -457,8 +463,10 @@ def phase_stage(videos: list[Video], bucket: str, project: str,
             video.error = f"local mp4 missing for stage"
             err += 1
             continue
-        input_blob = f"{GCS_INPUT_PREFIX}/{video.youtube_id}.mp4"
-        output_blob = f"{GCS_OUTPUT_PREFIX}/{video.youtube_id}-output.json"
+        # Per-project namespace prevents short_id collisions across projects.
+        ns = f"/{GCS_NAMESPACE}" if GCS_NAMESPACE else ""
+        input_blob = f"{GCS_INPUT_PREFIX}{ns}/{video.youtube_id}.mp4"
+        output_blob = f"{GCS_OUTPUT_PREFIX}{ns}/{video.youtube_id}-output.json"
         if not gcs_upload(video.mp4_path, bucket, input_blob, project):
             video.status = "error"
             video.error = "GCS upload failed"
@@ -505,7 +513,8 @@ def phase_retrieve(videos: list[Video], bucket: str, project: str,
             log(f"[{video.youtube_id}] output.json already local — skipping retrieve", indent=1)
             ok += 1
             continue
-        blob = video.gcs_output_blob or f"{GCS_OUTPUT_PREFIX}/{video.youtube_id}-output.json"
+        ns = f"/{GCS_NAMESPACE}" if GCS_NAMESPACE else ""
+        blob = video.gcs_output_blob or f"{GCS_OUTPUT_PREFIX}{ns}/{video.youtube_id}-output.json"
         if gcs_download(bucket, blob, video.output_path, project, max_wait_seconds):
             kb = video.output_path.stat().st_size // 1024
             log(f"[{video.youtube_id}] retrieved ({kb} KB) → {video.output_path}", indent=1)
@@ -688,16 +697,35 @@ def deepnote_post(token: str, notebook_id: str, video: Video, extra_inputs: dict
 
 
 def deepnote_get_run(token: str, run_id: str) -> dict:
-    """Single GET of a run's status."""
+    """Single GET of a run's status.
+
+    Retries on URLError (transient DNS / connection / SSL failures from local
+    network drops) with exponential backoff. Without this, a single DNS hiccup
+    (e.g., a power flicker on the operator's side) crashes the entire batch
+    mid-poll — verified 2026-06-20T15:31 outage that killed 13 pending lessons.
+    HTTPErrors are NOT retried — those are server-side rejections that won't
+    self-heal on a retry.
+    """
     req = urllib.request.Request(
         f"{DEEPNOTE_API_BASE}/v2/runs/{run_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        return {"error": f"HTTP {e.code}: {e.read().decode()[:300]}"}
+    last_url_err = None
+    for attempt in range(4):  # 4 attempts: 0, 1, 2, 3 — total wait 0+5+10+20 = 35s
+        try:
+            with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            return {"error": f"HTTP {e.code}: {e.read().decode()[:300]}"}
+        except urllib.error.URLError as e:
+            last_url_err = e
+            if attempt < 3:
+                backoff = 5 * (2 ** attempt)  # 5, 10, 20 sec
+                log(f"  [retry] deepnote_get_run URLError ({e.reason!r}); waiting {backoff}s and retrying (attempt {attempt+2}/4)", indent=2)
+                time.sleep(backoff)
+                continue
+            break
+    return {"error": f"URL error after 4 attempts: {last_url_err.reason if last_url_err else 'unknown'}"}
 
 
 def _extract_status(resp: dict) -> tuple[str, str]:
@@ -1262,6 +1290,11 @@ def main():
                          "Set to empty string to skip impersonation if you have a service-account JSON key activated."))
     p.add_argument("--no-gcs", action="store_true",
                    help="Disable GCS staging entirely — fall back to legacy Drive-sync path (ingest uses local Deepnote path).")
+    p.add_argument("--namespace", default="",
+                   help=("Per-project GCS namespace. When set, inputs land under inputs/<ns>/<id>.mp4 "
+                         "and outputs under outputs/<ns>/<id>-output.json — prevents short_id collisions "
+                         "across projects (e.g., nightcode vs cursor-clone vs Tejas). "
+                         "Inferred from manifest.label_slug when omitted."))
     p.add_argument("--input-ttl-hours", type=int, default=DEFAULT_INPUT_TTL_HOURS,
                    help=f"Signed-GET-URL TTL for input mp4 (default: {DEFAULT_INPUT_TTL_HOURS}h)")
     p.add_argument("--output-ttl-hours", type=int, default=DEFAULT_OUTPUT_TTL_HOURS,
@@ -1329,6 +1362,15 @@ def main():
         videos = load_manifest(manifest_path)
         if not videos:
             sys.exit(f"FATAL: no items in {manifest_path}")
+        # Per-project GCS namespace: --namespace wins; else infer from manifest.label_slug.
+        if not args.namespace:
+            try:
+                m = json.loads(manifest_path.read_text())
+                args.namespace = (m.get("label_slug") or m.get("label") or "").strip()
+                # Sanitize for GCS object names: lowercase, alnum + dash + underscore only.
+                args.namespace = re.sub(r"[^a-z0-9_-]+", "-", args.namespace.lower()).strip("-")
+            except Exception:
+                args.namespace = ""
         # The download phase is meaningless for manifest mode — MP4s already
         # exist locally (walker pre-staged them).  Warn but don't fail.
         if args.phase in ("download", "all"):
@@ -1386,6 +1428,15 @@ def main():
     log("")
 
     use_gcs = not args.no_gcs
+
+    # Per-project GCS namespace — picked up by phase_stage + phase_retrieve via
+    # the module-level GCS_NAMESPACE. Log it so the operator sees the prefix in use.
+    global GCS_NAMESPACE
+    GCS_NAMESPACE = args.namespace or ""
+    if GCS_NAMESPACE:
+        log(f"gcs namespace: {GCS_NAMESPACE}  (inputs/{GCS_NAMESPACE}/, outputs/{GCS_NAMESPACE}/)")
+    else:
+        log(f"gcs namespace: (none — flat inputs/ + outputs/, collision risk with prior runs)")
 
     if args.phase == "download":
         phase_download(videos, args.format)

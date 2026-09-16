@@ -57,12 +57,15 @@ function rateOk(ip: string): boolean {
   return true;
 }
 
-// CORS: echo the Origin ONLY when it is karve.ai or a *.karve.ai subdomain; never a wildcard.
+// CORS: echo the Origin ONLY for our first-party identity/property hosts; never a wildcard.
+// Allowed: karve.ai + *.karve.ai (studio), verum.sh + *.verum.sh (id.verum.sh — the Verum ID
+// login home), noodles.haus + *.noodles.haus (tailnet properties, e.g. docs.noodles.haus).
+const CORS_HOSTS = ['karve.ai', 'verum.sh', 'noodles.haus'];
 function corsOrigin(origin: string | undefined): string | null {
   if (!origin) return null;
   try {
     const h = new URL(origin).hostname;
-    if (h === 'karve.ai' || h.endsWith('.karve.ai')) return origin;
+    if (CORS_HOSTS.some((d) => h === d || h.endsWith('.' + d))) return origin;
   } catch { /* ignore */ }
   return null;
 }

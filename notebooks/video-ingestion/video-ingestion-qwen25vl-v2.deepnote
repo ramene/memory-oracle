@@ -677,14 +677,23 @@ project:
                         print(f'  sidecar: {SUBS_PATH.name}')
                         break
             else:
-                import yt_dlp
+                import yt_dlp, shutil, time
                 yt_match = re.search(r'(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|v/))([A-Za-z0-9_-]{11})', VIDEO_URL)
                 VIDEO_ID = yt_match.group(1) if yt_match else hashlib.sha1(VIDEO_URL.encode()).hexdigest()[:11]
                 VIDEO_PATH = WORK / f'{VIDEO_ID}.mp4'
                 SUBS_PATH = WORK / f'{VIDEO_ID}.en.vtt'
+
+                # F3.1: download to local tmpfs (/tmp) to dodge Deepnote network-mount EIO on
+                # the final yt-dlp .part→.mp4 rename. Root cause documented 2026-06-20: the
+                # /datasets/_deepnote_work/work/ mount is fragile for renames of large files
+                # (≥400 MB), throwing OSError [Errno 5] after the download completes 100%.
+                TMP_DIR = Path('/tmp/dl')
+                TMP_DIR.mkdir(parents=True, exist_ok=True)
+
                 ydl_opts = {
                     'format': 'best[height<=360][ext=mp4]/best[height<=360]/best',
-                    'outtmpl': str(VIDEO_PATH.with_suffix('')) + '.%(ext)s',
+                    'paths': {'home': str(TMP_DIR), 'temp': str(TMP_DIR)},
+                    'outtmpl': f'{VIDEO_ID}.%(ext)s',
                     'writesubtitles': EXTRACT_MODE in ('transcript', 'both'),
                     'writeautomaticsub': EXTRACT_MODE in ('transcript', 'both'),
                     'subtitleslangs': ['en'], 'subtitlesformat': 'vtt',
@@ -695,6 +704,32 @@ project:
                     ydl_opts['cookiefile'] = cookies_path
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(VIDEO_URL, download=True)
+
+                # F3.2: cross-FS copy from tmpfs to WORK with 3-attempt retry + exponential
+                # backoff (1s, 2s, 4s). The transient EIO is more likely on larger files;
+                # the same operation usually succeeds on a second attempt.
+                def _robust_copy(src, dst, attempts=3):
+                    last_err = None
+                    for i in range(attempts):
+                        try:
+                            shutil.copy(str(src), str(dst))
+                            return
+                        except OSError as e:
+                            last_err = e
+                            print(f'  copy {src.name} attempt {i+1}/{attempts} failed: {e}; retry in {2**i}s')
+                            time.sleep(2 ** i)
+                    raise last_err
+
+                _robust_copy(TMP_DIR / f'{VIDEO_ID}.mp4', VIDEO_PATH)
+                tmp_subs = TMP_DIR / f'{VIDEO_ID}.en.vtt'
+                if tmp_subs.exists():
+                    _robust_copy(tmp_subs, SUBS_PATH)
+                # Cleanup tmpfs (Deepnote /tmp resets between machine restarts anyway, but
+                # explicit unlink avoids /tmp pressure if the machine stays warm).
+                (TMP_DIR / f'{VIDEO_ID}.mp4').unlink(missing_ok=True)
+                if tmp_subs.exists():
+                    tmp_subs.unlink(missing_ok=True)
+
                 duration_sec = info.get('duration', 0)
                 title = info.get('title', '')
                 uploader = info.get('uploader', '')

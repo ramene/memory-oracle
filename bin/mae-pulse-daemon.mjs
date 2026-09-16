@@ -31,6 +31,7 @@
 
 import dgram from 'node:dgram';
 import fs from 'node:fs';
+import net from 'node:net';
 import { spawn, execFileSync, execSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -252,6 +253,7 @@ function sendToAllPeers(buf, label) {
     sent++;
   }
   log(`→ ${label} to ${sent} peer(s)`);
+  publishEvent({ kind: 'outbound', label, peer_count: sent });
 }
 
 // ─── Inbound: receive UDP → verify → dispatch ───────────────────────────────
@@ -260,6 +262,7 @@ sock.on('message', (buf, rinfo) => {
   if (!msg) return;
   if (msg.from === FROM) return;            // self-loop ignore
   log(`← ${msg.type} from ${msg.from} (${rinfo.address}:${rinfo.port})`);
+  publishEvent({ kind: 'inbound', type: msg.type, from: msg.from, addr: `${rinfo.address}:${rinfo.port}`, payload: msg.payload });
   switch (msg.type) {
     case 'pulse':
       handlePulse(msg);
@@ -319,8 +322,97 @@ async function main() {
     log(`UDP socket bound :${PORT}`);
   });
   startWatcher();
+  startControlSocket();
   setInterval(broadcastPresence, PRESENCE_INTERVAL_MS);
   log(`daemon ready (PROTOCOL_VERSION=${PROTOCOL_VERSION})`);
+}
+
+// ─── Unix-socket IPC for surface consumers (CLI, Obsidian, macOS tray) ──────
+// Path: ~/.local/share/mae-substrate/pulse/control.sock
+// Protocol: line-delimited JSON over UDS, 0600 permission.
+// Operations: status, subscribe, repos.list (stub), audit.tail (stub).
+const CONTROL_SOCK = path.join(os.homedir(), '.local/share/mae-substrate/pulse/control.sock');
+const subscribers = new Set();
+const recentEvents = [];   // ring buffer for audit.tail
+const RECENT_MAX = 200;
+
+function publishEvent(evt) {
+  recentEvents.push({ ts: new Date().toISOString(), ...evt });
+  if (recentEvents.length > RECENT_MAX) recentEvents.shift();
+  const line = JSON.stringify(evt) + '\n';
+  for (const s of subscribers) {
+    try { s.write(line); } catch {}
+  }
+}
+
+function handleControlRequest(conn, req) {
+  const op = req.op;
+  let res;
+  try {
+    switch (op) {
+      case 'status':
+        res = {
+          ok: true,
+          host: HOSTNAME,
+          protocol_version: PROTOCOL_VERSION,
+          vault_head: currentCommit(),
+          peers: Object.entries(peers).filter(([n]) => n !== HOSTNAME).map(([n, p]) => ({
+            name: n, ip: p.ip, port: p.port || PORT,
+          })),
+          uptime_sec: Math.round(process.uptime()),
+        };
+        break;
+      case 'subscribe':
+        subscribers.add(conn);
+        conn.on('close', () => subscribers.delete(conn));
+        res = { ok: true, subscribed: true };
+        break;
+      case 'audit.tail':
+        res = { ok: true, entries: recentEvents.slice(-(req.n || 50)) };
+        break;
+      case 'repos.list':
+        // Stub for Phase 3 — multi-recipient envelope work
+        res = { ok: true, repos: [], note: 'Tier-3 verum:// repos not yet implemented' };
+        break;
+      case 'repos.add_member':
+      case 'repos.revoke_member':
+        res = { ok: false, error: 'Tier-3 not yet implemented; see architecture-notes/docs/architecture/mae-pulse-client-2026-06-25.md' };
+        break;
+      default:
+        res = { ok: false, error: `unknown op: ${op}` };
+    }
+  } catch (e) {
+    res = { ok: false, error: e.message };
+  }
+  conn.write(JSON.stringify(res) + '\n');
+}
+
+function startControlSocket() {
+  // Remove stale socket
+  try { fs.unlinkSync(CONTROL_SOCK); } catch {}
+  fs.mkdirSync(path.dirname(CONTROL_SOCK), { recursive: true });
+  const server = net.createServer((conn) => {
+    let buf = '';
+    conn.on('data', (chunk) => {
+      buf += chunk.toString('utf8');
+      let nl;
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!line.trim()) continue;
+        let req;
+        try { req = JSON.parse(line); }
+        catch { conn.write(JSON.stringify({ ok:false, error:'invalid JSON' }) + '\n'); continue; }
+        handleControlRequest(conn, req);
+      }
+    });
+    conn.on('error', () => {});
+  });
+  server.listen(CONTROL_SOCK, () => {
+    try { fs.chmodSync(CONTROL_SOCK, 0o600); } catch {}
+    log(`control socket bound ${CONTROL_SOCK} (0600)`);
+  });
+  server.on('error', (e) => log(`control socket error: ${e.message}`, 'warn'));
 }
 
 main().catch(e => {
