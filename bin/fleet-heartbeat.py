@@ -406,6 +406,19 @@ def main():
     # probes are independent + I/O-bound (curl/ssh) — run them concurrently so a full sweep is ~15s not ~120s
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
         results = list(ex.map(_run_one, to_run))
+    # SYSTEMIC PROBE HARDENING (operator 2026-09-18): a BATCH of simultaneous timeouts = THIS prober's
+    # network hiccup, not N independent outages. If many checks (incl. LAN/Pi targets) time out at once,
+    # downgrade the timeout-REDs to WARN so a noodles network blip stops faking criticals in the footer.
+    def _is_timeout(ev):
+        e = (ev or "").lower()
+        return any(k in e for k in ("timeout", "unreachable", "could not verify", "-> 000", "imeout", "refused"))
+    _batch = [r for r in results if r[2] in ("red", "warn") and _is_timeout(r[5])]
+    if len(_batch) >= 5:   # 5+ independent checks timing out together = prober-degraded, not real outages
+        results = [
+            (n, c, ("warn" if (st == "red" and _is_timeout(ev)) else st), keep, iv,
+             ("[prober-network-degraded — batch timeout, likely NOT a real outage] " + ev) if (st == "red" and _is_timeout(ev)) else ev)
+            for (n, c, st, keep, iv, ev) in results
+        ]
     sym = {"green": "✅", "warn": "⚠️", "red": "❌"}
     g = sum(r[2] == "green" for r in results); w = sum(r[2] == "warn" for r in results); r_ = sum(r[2] == "red" for r in results)
     crit = [r for r in results if _crit(r[0], r[3])]
