@@ -361,19 +361,48 @@ def _run_one(chk):
 
 
 def main():
+    # criticality tiers (operator 2026-09-18): the footer + 30-min cadence watch ONLY the 23 CRITICAL
+    # checks; non-critical ones (internal *.noodles.haus surfaces, Charlie voice, the daily digest, and
+    # the 15 revenue-property surfaces) probe at a longer interval and stay OUT of the footer count.
+    NONCRITICAL_INFRA = {
+        "docs.noodles.haus (Caddy)", "understand.noodles.haus (Caddy)",
+        "studio.noodles.haus (Caddy)", "n8n.noodles.haus (Caddy)",
+        "Charlie voice :8600", "digest builder cron",
+    }
+    def _crit(name, keep):
+        return keep and name not in NONCRITICAL_INFRA
+    _sd = os.path.expanduser("~/.local/state/fleet-heartbeat"); os.makedirs(_sd, exist_ok=True)
+    # run counter → non-critical checks probe every TIER-th run (~hourly at the 30-min cadence)
+    TIER = 2
+    _cf = os.path.join(_sd, ".runcount")
+    try:
+        cnt = int(open(_cf).read().strip()) + 1
+    except Exception:
+        cnt = 1
+    try:
+        open(_cf, "w").write(str(cnt))
+    except Exception:
+        pass
+    run_noncrit = (cnt % TIER == 0)
+    to_run = [c for c in CHECKS if _crit(c[0], c[2]) or run_noncrit]
     # probes are independent + I/O-bound (curl/ssh) — run them concurrently so a full sweep is ~15s not ~120s
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
-        results = list(ex.map(_run_one, CHECKS))
+        results = list(ex.map(_run_one, to_run))
     sym = {"green": "✅", "warn": "⚠️", "red": "❌"}
     g = sum(r[2] == "green" for r in results); w = sum(r[2] == "warn" for r in results); r_ = sum(r[2] == "red" for r in results)
+    crit = [r for r in results if _crit(r[0], r[3])]
+    cg = sum(r[2] == "green" for r in crit); cw = sum(r[2] == "warn" for r in crit); cr = sum(r[2] == "red" for r in crit)
     order = {"red": 0, "warn": 1, "green": 2}
     results.sort(key=lambda x: (0 if x[3] else 1, order[x[2]], x[1]))
     matched, out = nocodb_write(results, g, w, r_)
-    print(f"heartbeat {NOW}: {g}green {w}warn {r_}red / {len(results)} → nocodb Daily Checks ({matched} matched)")
-    # cache a tiny status for the ⚖️ laws-footer hook (empirical liveness, read every prompt)
+    print(f"heartbeat {NOW}: {g}green {w}warn {r_}red / {len(results)} ran "
+          f"(CRIT {cg}✅/{cw}⚠/{cr}❌ of {len(crit)}; noncrit {'run' if run_noncrit else 'skip'} run#{cnt}) "
+          f"→ nocodb ({matched} matched)")
+    # cache a tiny status for the ⚖️ laws-footer hook — the CRITICAL subset is what the footer shows
     try:
-        _sd = os.path.expanduser("~/.local/state/fleet-heartbeat"); os.makedirs(_sd, exist_ok=True)
-        json.dump({"green": g, "warn": w, "red": r_, "total": len(results), "ts": NOW},
+        json.dump({"green": g, "warn": w, "red": r_, "total": len(results),
+                   "crit_green": cg, "crit_warn": cw, "crit_red": cr, "crit_total": len(crit),
+                   "ts": NOW},
                   open(os.path.join(_sd, "status.json"), "w"))
     except Exception:
         pass
