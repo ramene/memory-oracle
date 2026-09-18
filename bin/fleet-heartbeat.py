@@ -175,14 +175,20 @@ def p_ses():
 FW_PROJECTS = ["claey-338919", "mae-stack-prod", "mae-apps-prod", "mae-commerce-prod",
                "mae-content-prod", "mae-growth-prod"]
 def p_firewall():
-    exposed = []
+    # HARDENED 2026-09-18: a gcloud TIMEOUT must NOT masquerade as "EXPOSED". Only RED when gcloud
+    # actually returns rules AND none is DENY,*; a failed/empty probe → WARN (could-not-verify).
+    exposed = []; unverifiable = []
     for p in FW_PROJECTS:
-        _, out = run(f"gcloud app firewall-rules list --project={p} --format='csv[no-heading](action,sourceRange)' 2>/dev/null")
-        locked = any(r.strip() == "DENY,*" for r in out.splitlines())
-        if not locked:
+        rc, out = run(f"gcloud app firewall-rules list --project={p} --format='csv[no-heading](action,sourceRange)' 2>/dev/null")
+        lines = [r.strip() for r in out.splitlines() if r.strip()]
+        if rc != 0 or not lines:                       # probe couldn't complete — NOT proof of exposure
+            unverifiable.append(p); continue
+        if not any(r == "DENY,*" for r in lines):      # rules returned but no operator-net lock = REAL
             exposed.append(p)
     if exposed:
         return "red", f"EXPOSED — no DENY* lock: {', '.join(exposed)}"
+    if unverifiable:
+        return "warn", f"could NOT verify {len(unverifiable)}/{len(FW_PROJECTS)} (gcloud timeout/unreachable): {', '.join(unverifiable)} — NOT a confirmed exposure"
     return "green", f"all {len(FW_PROJECTS)} GAE projects operator-net locked (DENY *)"
 
 
@@ -190,17 +196,22 @@ def p_firewall():
 MACS = ["noodles", "tunafish", "sequoia"]   # the 3 macs that carry laws.md + the mae plugin
 
 def p_config_parity():
-    # md5 laws.md across the 3 macs; GREEN only if all identical. macOS md5 -q, linux md5sum fallback.
+    # md5 laws.md across the 3 macs. HARDENED 2026-09-18: an ssh TIMEOUT is UNREACHABLE, not "drift".
+    # RED only when REACHABLE hosts genuinely disagree; unreachable host(s) with the rest matching → WARN.
     f = "~/.local/share/journal/.claude/laws.md"
     h = {}
     for host in MACS:
-        _, out = ssh(host, f"md5 -q {f} 2>/dev/null || md5sum {f} 2>/dev/null | awk '{{print $1}}'")
+        rc, out = ssh(host, f"md5 -q {f} 2>/dev/null || md5sum {f} 2>/dev/null | awk '{{print $1}}'")
         tok = (out.strip().split() or [""])[0]
-        h[host] = tok[:12] if tok else "MISSING"
-    uniq = set(h.values())
-    ok = len(uniq) == 1 and "MISSING" not in uniq
+        h[host] = tok[:12] if (rc == 0 and tok) else "UNREACHABLE"
+    reachable = {k: v for k, v in h.items() if v != "UNREACHABLE"}
+    unreachable = [k for k, v in h.items() if v == "UNREACHABLE"]
     ev = "laws.md md5: " + ", ".join(f"{k}={v[:8]}" for k, v in h.items())
-    return ("green" if ok else "red"), ev
+    if len(set(reachable.values())) > 1:               # reachable hosts truly differ = REAL drift
+        return "red", ev + " — REAL DRIFT (reachable hosts differ)"
+    if unreachable:                                     # can't fully verify — not proof of drift
+        return "warn", ev + f" — {','.join(unreachable)} unreachable (ssh timeout); reachable hosts match"
+    return "green", ev
 
 def p_pi_pg():
     # TCP reachability to the tailnet-only Pi Postgres (maeconnect rooms DB)
@@ -209,18 +220,25 @@ def p_pi_pg():
     return ("green" if ok else "red"), f"nc 100.115.79.101:5432 (rooms DB, tailnet) -> {'reachable' if ok else 'UNREACHABLE'}"
 
 def p_mae_plugin():
-    # read the mae obsidian-plugin version on the 3 macs; GREEN if identical, RED on drift
+    # read the mae obsidian-plugin version on the 3 macs. HARDENED 2026-09-18: ssh TIMEOUT = UNREACHABLE
+    # (WARN), NOT drift. RED only when reachable hosts disagree OR a reachable host is genuinely MISSING the file.
     import re
     mf = "/Users/ramene/.remote/@vaults/.build/obsidian-vault/.obsidian/plugins/mae/manifest.json"
     v = {}
     for host in MACS:
-        _, out = ssh(host, f"grep -oE '\"version\"[^,]*' {mf} 2>/dev/null | head -1")
+        rc, out = ssh(host, f"grep -oE '\"version\"[^,]*' {mf} 2>/dev/null | head -1")
+        if rc != 0:
+            v[host] = "UNREACHABLE"; continue
         m = re.search(r'([0-9][0-9A-Za-z.\-]*)', out or "")
-        v[host] = m.group(1) if m else "MISSING"
-    uniq = set(v.values())
-    ok = len(uniq) == 1 and "MISSING" not in uniq
+        v[host] = m.group(1) if m else "MISSING"       # rc==0 but no version = file genuinely absent (REAL)
+    reachable = {k: val for k, val in v.items() if val != "UNREACHABLE"}
+    unreachable = [k for k, val in v.items() if val == "UNREACHABLE"]
     ev = "mae manifest version: " + ", ".join(f"{k}={val}" for k, val in v.items())
-    return ("green" if ok else "red"), ev
+    if len(set(reachable.values())) > 1:               # reachable hosts differ (incl a real MISSING) = drift
+        return "red", ev + " — REAL DRIFT (reachable hosts differ)"
+    if unreachable:
+        return "warn", ev + f" — {','.join(unreachable)} unreachable (ssh timeout); reachable hosts match"
+    return "green", ev
 
 def p_warmpool():
     # warmpool-warmer daemon on blvck-pi: GREEN active + sent in last 36h; WARN active-but-idle; RED down.
